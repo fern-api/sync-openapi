@@ -226,3 +226,5 @@ async function createPullRequest(options: SyncOptions): Promise<void> {
     core.warning('GitHub token not provided. Skipping PR creation. Changes have been pushed to the remote branch.');
   }
 }
+
+run();
