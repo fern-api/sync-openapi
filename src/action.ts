@@ -122,22 +122,28 @@ async function cloneRepository(options: SyncOptions): Promise<void> {
 }
 
 async function copyOpenAPIFiles(options: SyncOptions): Promise<void> {
-  core.info('Copying OpenAPI files from target to destination');
-  
-  const sourceRepoRoot = path.resolve(process.env.GITHUB_WORKSPACE || '');
-  const destRepoRoot = path.resolve('.');
-  
-  for (const mapping of options.openapi) {
-    const sourcePath = path.join(sourceRepoRoot, mapping.source);
-    const destPath = path.join(destRepoRoot, mapping.destination);
+    core.info('Copying OpenAPI files to destination locations');
     
-    core.info(`Copying ${sourcePath} to ${destPath}`);
+    const sourceRepoRoot = path.resolve(process.env.GITHUB_WORKSPACE || '');
+    const destRepoRoot = path.resolve('.');
     
-    await io.mkdirP(path.dirname(destPath));
-    
-    fs.copyFileSync(sourcePath, destPath);
+    for (const mapping of options.openapi) {
+      const sourcePath = path.join(sourceRepoRoot, mapping.source);
+      const destPath = path.join(destRepoRoot, mapping.destination);
+      
+      core.info(`Checking for source file: ${sourcePath}`);
+      
+      if (!fs.existsSync(sourcePath)) {
+        throw new Error(`Source file not found: ${mapping.source}`);
+      }
+      
+      core.info(`Copying ${sourcePath} to ${destPath}`);
+      
+      await io.mkdirP(path.dirname(destPath));
+      
+      fs.copyFileSync(sourcePath, destPath);
+    }
   }
-}
 
 async function createPullRequest(options: SyncOptions): Promise<void> {
   const diff = await exec.getExecOutput('git', ['status', '--porcelain']);

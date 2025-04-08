@@ -82,11 +82,8 @@ async function run() {
             branch,
             autoMerge
         };
-        // 2. Clone fern-config repo
         await cloneRepository(options);
-        // 3. Copy updated files to fern-config based on openapi source/destination
         await copyOpenAPIFiles(options);
-        // 4. Create PR in fern-config with updated OpenAPI
         await createPullRequest(options);
     }
     catch (error) {
@@ -130,30 +127,29 @@ async function cloneRepository(options) {
     const repoUrl = `https://x-access-token:${options.token}@github.com/${options.repository}.git`;
     const repoDir = 'fern-config';
     core.info(`Cloning repository ${options.repository} to ${repoDir}`);
-    // Create directory if it doesn't exist
     await io.mkdirP(repoDir);
-    // Clone the repository with error handling
     try {
-        // Clone the repository
         await exec.exec('git', ['clone', repoUrl, repoDir]);
     }
     catch (error) {
         throw new Error(`Failed to clone repository. Please ensure your token has 'repo' scope and you have write access to ${options.repository}.`);
     }
-    // Configure git user
     process.chdir(repoDir);
     await exec.exec('git', ['config', 'user.name', 'github-actions']);
     await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
-    // Create a new branch
     await exec.exec('git', ['checkout', '-b', options.branch]);
 }
 async function copyOpenAPIFiles(options) {
-    core.info('Copying OpenAPI files from target to destination');
+    core.info('Copying OpenAPI files to destination locations');
     const sourceRepoRoot = path.resolve(process.env.GITHUB_WORKSPACE || '');
     const destRepoRoot = path.resolve('.');
     for (const mapping of options.openapi) {
         const sourcePath = path.join(sourceRepoRoot, mapping.source);
         const destPath = path.join(destRepoRoot, mapping.destination);
+        core.info(`Checking for source file: ${sourcePath}`);
+        if (!fs.existsSync(sourcePath)) {
+            throw new Error(`Source file not found: ${mapping.source}`);
+        }
         core.info(`Copying ${sourcePath} to ${destPath}`);
         await io.mkdirP(path.dirname(destPath));
         fs.copyFileSync(sourcePath, destPath);
