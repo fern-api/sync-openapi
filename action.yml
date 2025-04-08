@@ -1,0 +1,30 @@
+name: 'Sync OpenAPI Spec'
+description: 'Sync OpenAPI specifications from source repository to fern-config repository'
+author: 'Fern'
+inputs:
+  repository:
+    description: 'Target repository in format org/repo'
+    required: true
+  openapi:
+    description: 'YAML array of OpenAPI mappings with source and destination paths'
+    required: true
+  token:
+    description: 'GitHub token for authentication (requires read access to source repo, write access to target repo)'
+    required: false
+    default: ${{ github.token }}
+  branch:
+    description: 'Branch name to create in the target repository'
+    required: false
+    default: 'update-openapi'
+  auto_merge:
+    description: 'Whether to automatically merge the PR (requires merge permissions)'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
+
+branding:
+  icon: 'refresh-cw'
+  color: 'blue'
