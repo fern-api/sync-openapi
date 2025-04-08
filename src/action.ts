@@ -56,12 +56,14 @@ export async function run(): Promise<void> {
       branch,
       autoMerge
     };
+
+    core.info('Options: ' + JSON.stringify(options));
     
-    await cloneRepository(options);
+    // await cloneRepository(options);
     
-    await copyOpenAPIFiles(options);
+    // await copyOpenAPIFiles(options);
     
-    await createPullRequest(options);
+    // await createPullRequest(options);
     
   } catch (error) {
     if (error instanceof Error) {
