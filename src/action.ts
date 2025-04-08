@@ -58,7 +58,7 @@ export async function run(): Promise<void> {
     };    
     await cloneRepository(options);
     
-    // await copyOpenAPIFiles(options);
+    await copyOpenAPIFiles(options);
     
     // await createPullRequest(options);
     

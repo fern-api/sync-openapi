@@ -83,7 +83,7 @@ async function run() {
             autoMerge
         };
         await cloneRepository(options);
-        // await copyOpenAPIFiles(options);
+        await copyOpenAPIFiles(options);
         // await createPullRequest(options);
     }
     catch (error) {
