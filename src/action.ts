@@ -55,11 +55,8 @@ export async function run(): Promise<void> {
       token,
       branch,
       autoMerge
-    };
-
-    core.info('Options: ' + JSON.stringify(options));
-    
-    // await cloneRepository(options);
+    };    
+    await cloneRepository(options);
     
     // await copyOpenAPIFiles(options);
     

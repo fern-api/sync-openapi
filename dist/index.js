@@ -82,8 +82,7 @@ async function run() {
             branch,
             autoMerge
         };
-        core.info('Options: ' + JSON.stringify(options));
-        // await cloneRepository(options);
+        await cloneRepository(options);
         // await copyOpenAPIFiles(options);
         // await createPullRequest(options);
     }
