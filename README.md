@@ -4,54 +4,61 @@ A GitHub Action to sync OpenAPI specifications from your source repository to a 
 
 ## Usage
 
+1. Create a file named `sync-openapi.yml` in `.github/workflows/`. 
+2. Include the following contents in the `sync-openapi.yml` you just created: 
+
 ```yaml
-name: Sync OpenAPI Specs
-
+name: Sync OpenAPI Specs # can be customized
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
-
+    branches:
+      - main
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Sync OpenAPI spec to fern-config
-        uses: your-org/sync-openapi@v1
+      - name: Sync OpenAPI spec to target repo
+        uses: sahil485/sync-openapi-test@main
         with:
-          repository: 'your-org/fern-config'
-          token: ${{ secrets.PAT_TOKEN }}  # Personal access token with repo scope
-          openapi: |
-            - source: server1/openapi.yml
-              destination: fern/apis/server1/openapi/my-openapi.yml
-            - source: server2/openapi.yml
-              destination: fern/apis/server2/openapi/my-openapi.yml
-          auto_merge: 'true'  # Optional
+          repository: fern-api/sync-openapi
+          token: ${{ secrets.<PAT_TOKEN_NAME> }}
+          files: |
+            - source: path/to/first/source/file.yml
+              destination: path/to/first/destination/file.yml
+            - source: path/to/second/source/file.yml
+              destination: path/to/second/destination/file.yml
+
+                ....
+
+          branch: main
+          auto_merge: false
+
 ```
 
 ## Inputs
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `repository` | Target repository in format org/repo | Yes | - |
-| `openapi` | YAML array of OpenAPI mappings with source and destination paths | Yes | - |
+| `repository` | Target repository in format `org/repo` | Yes | - |
+| `files` | Array of mappings with source and destination paths | Yes | - |
 | `token` | GitHub token for authentication | No | `${{ github.token }}` |
-| `branch` | Branch name to create in the target repository | No | `update-openapi` |
-| `auto_merge` | Whether to automatically merge the PR | No | `false` |
+| `branch` | Branch to push to in the target repository | Yes | - |
+| `auto_merge` | Will push directly to the specified branch when `true`, will create a PR from the specified base branch onto main if `false`. | No | `false` |
 
 
 ## Required Permissions
 
 The GitHub token used for this action must have:
 
-1. **Read access** to the source repository (where the action is running)
-2. **Write access** to the target repository (where the PR will be created)
+1. **Read access** to the source repository
+2. **Read/Write access** to `Contents` and `Pull requests`
 
-## How it works
+## Adding a Token for GitHub Actions
 
-1. Clones the target repository
-2. Copies the specified OpenAPI files from the source repository to the target repository
-3. Creates a pull request with the changes
-4. Optionally auto-merges the pull request
+1. Generate a fine-grained https://github.com/settings/personal-access-tokens token with the above-mentioned permissions
+2. Go to `Settings -> Secrets and variables -> Actions` and click on `New repository secret`
+3. Name your token (i.e. `OPENAPI_SYNC_TOKEN`) and paste in the PAT token generated above
+4. Replace `<PAT_TOKEN_NAME>` in the example YAML configuration with your token name.
 
