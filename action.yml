@@ -5,7 +5,7 @@ inputs:
   repository:
     description: 'Target repository in format org/repo'
     required: true
-  openapi:
+  files:
     description: 'YAML array of OpenAPI mappings with source and destination paths'
     required: true
   token:
@@ -13,11 +13,10 @@ inputs:
     required: false
     default: ${{ github.token }}
   branch:
-    description: 'Branch name to create in the target repository'
-    required: false
-    default: 'update-openapi'
+    description: 'Branch to push to in the target repository'
+    required: true
   auto_merge:
-    description: 'Whether to automatically merge the PR (requires merge permissions)'
+    description: 'Whether to push directly to the specified branch or create a PR'
     required: false
     default: 'false'
 
