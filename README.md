@@ -33,7 +33,7 @@ jobs:
                 ....
 
           branch: main
-          auto_merge: false
+          auto_merge: true # note: branch = main with auto_merge = false won't work because PRs can't be created from main -> main
 
 ```
 
