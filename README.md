@@ -1,6 +1,6 @@
-# Sync OpenAPI Action
+# Sync OpenAPI
 
-A GitHub Action to sync OpenAPI specifications from your source repository to a target repository (like fern-config).
+A GitHub Action to sync files from your source repository to a target repository (like fern-config).
 
 ## Usage
 
