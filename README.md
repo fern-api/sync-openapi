@@ -1,4 +1,4 @@
-# Sync OpenAPI
+# sync-openapi
 
 A GitHub Action to sync files from your source repository to a target repository (like fern-config).
 
@@ -53,7 +53,7 @@ jobs:
 The GitHub token used for this action must have:
 
 1. **Read access** to the source repository
-2. **Read/Write access** to `Contents` and `Pull requests`
+2. **Read/Write access** to `Contents` and `Pull requests` for the target repository
 
 ## Adding a Token for GitHub Actions
 
