@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Sync OpenAPI spec to target repo
-        uses: fern-api/sync-openapi@v0.0.1
+        uses: fern-api/sync-openapi@v0
         with:
           repository: fern-api/sync-openapi
           token: ${{ secrets.<PAT_TOKEN_NAME> }}
