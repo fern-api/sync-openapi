@@ -25,10 +25,10 @@ jobs:
           repository: fern-api/sync-openapi
           token: ${{ secrets.<PAT_TOKEN_NAME> }}
           files: |
-            - source: path/to/first/source/file.yml
-              destination: path/to/first/destination/file.yml
-            - source: path/to/second/source/file.yml
-              destination: path/to/second/destination/file.yml
+            - source: path/to/file1/in/this/repo.yml
+              destination: path/to/file1/in/destination/repo.yml
+            - source: path/to/file2/in/this/repo.yml
+              destination: path/to/file2/in/destination/repo.yml
 
                 ....
 
