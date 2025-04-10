@@ -4,7 +4,7 @@ A GitHub Action to sync files from your source repository to a target repository
 
 ## Usage
 
-1. Create a file named `sync-openapi.yml` in `.github/workflows/`. 
+1. In your your source repo, create a file named `sync-openapi.yml` in `.github/workflows/`. 
 2. Include the following contents in the `sync-openapi.yml` you just created: 
 
 ```yaml
