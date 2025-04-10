@@ -22,7 +22,7 @@ jobs:
       - name: Sync OpenAPI spec to target repo
         uses: fern-api/sync-openapi@v0
         with:
-          repository: fern-api/sync-openapi
+          repository: <your-org>/<your-target-repo>
           token: ${{ secrets.<PAT_TOKEN_NAME> }}
           files: |
             - source: path/to/file1/in/this/repo.yml # note: all file paths are relative to repository root
