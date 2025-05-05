@@ -245,7 +245,6 @@ async function syncDirectory(sourceDirPath: string, destDirPath: string, exclude
 }
 
 async function syncFile(sourceFilePath: string, destFilePath: string): Promise<void> {
-  core.info(`Syncing file: ${sourceFilePath} to ${destFilePath}`);
   await io.mkdirP(path.dirname(destFilePath));
   fs.copyFileSync(sourceFilePath, destFilePath);
 }
