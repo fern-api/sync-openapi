@@ -37186,7 +37186,6 @@ async function syncDirectory(sourceDirPath, destDirPath, excludePatterns) {
     }
 }
 async function syncFile(sourceFilePath, destFilePath) {
-    core.info(`Syncing file: ${sourceFilePath} to ${destFilePath}`);
     await io.mkdirP(path.dirname(destFilePath));
     fs.copyFileSync(sourceFilePath, destFilePath);
 }
