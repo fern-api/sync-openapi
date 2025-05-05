@@ -36775,7 +36775,7 @@ async function cloneRepository(options) {
         }
     }
     const repoUrl = `https://x-access-token:${options.token}@github.com/${options.repository}.git`;
-    const repoDir = 'temp-fern-config';
+    const repoDir = path.join(process.env.RUNNER_TEMP || '/tmp', 'temp-fern-config');
     core.info(`Cloning repository ${options.repository} to ${repoDir}`);
     await io.mkdirP(repoDir);
     try {
