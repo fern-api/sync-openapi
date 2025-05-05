@@ -36988,6 +36988,7 @@ const fs = __importStar(__nccwpck_require__(7147));
 const path = __importStar(__nccwpck_require__(1017));
 const yaml = __importStar(__nccwpck_require__(1917));
 const glob = __importStar(__nccwpck_require__(8211));
+const minimatch_1 = __nccwpck_require__(4501);
 async function run() {
     try {
         const repository = core.getInput('repository', { required: true });
@@ -37190,14 +37191,8 @@ async function syncFile(sourceFilePath, destFilePath) {
 }
 function isExcluded(filePath, excludePatterns) {
     const sourceRepoRoot = path.resolve(process.env.GITHUB_WORKSPACE || '');
-    return excludePatterns.some(pattern => {
-        const absolutePattern = path.isAbsolute(pattern)
-            ? pattern
-            : path.join(sourceRepoRoot, pattern);
-        // Simple path matching - can be enhanced with glob pattern matching if needed
-        return filePath === absolutePattern ||
-            filePath.startsWith(absolutePattern + path.sep);
-    });
+    const relativePath = path.relative(sourceRepoRoot, filePath);
+    return excludePatterns.some(pattern => (0, minimatch_1.minimatch)(relativePath, pattern));
 }
 async function commitChanges() {
     await exec.exec('git', ['add', '.'], { silent: true });
