@@ -36877,11 +36877,13 @@ async function copyMappedFiles(options) {
         if (sourceStats.isDirectory()) {
             // Handle directory copying
             await copyDirectory(sourcePath, destPath, mapping.exclude);
+            core.info(`Copied directory ${sourcePath} to ${destPath}`);
         }
         else {
             // Handle single file copying
             await io.mkdirP(path.dirname(destPath));
             fs.copyFileSync(sourcePath, destPath);
+            core.info(`Copied ${sourcePath} to ${destPath}`);
         }
     }
 }
