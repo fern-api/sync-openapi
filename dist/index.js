@@ -37087,7 +37087,7 @@ async function syncChanges(options) {
         const doesBranchExist = await branchExists(owner, repo, workingBranch, octokit);
         await setupBranch(workingBranch, doesBranchExist);
         await processSourceMappings(options);
-        const diff = await exec.getExecOutput('git', ['status', '--porcelain']);
+        const diff = await exec.getExecOutput('git', ['status', '--porcelain'], { silent: true });
         if (!diff.stdout.trim()) {
             core.info('No changes detected. Skipping further actions.');
             return;
@@ -37210,7 +37210,7 @@ async function hasDifferenceWithRemote(branchName) {
         return !!diff.stdout.trim();
     }
     catch (error) {
-        core.info(`Could not fetch remote branch, assuming first push: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        core.info(`Could not fetch remote branch, assuming this is the first push to new branch.`);
         return true;
     }
 }
