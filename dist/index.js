@@ -36713,30 +36713,30 @@ async function run() {
         const token = core.getInput('token') || process.env.GITHUB_TOKEN;
         const branch = core.getInput('branch', { required: true });
         const autoMerge = core.getBooleanInput('auto_merge') || false;
-        const sourceMappingInput = core.getInput('sources', { required: true });
-        let sourceMapping;
+        const fileMappingInput = core.getInput('sources', { required: true });
+        let fileMapping;
         try {
-            sourceMapping = yaml.load(sourceMappingInput);
+            fileMapping = yaml.load(fileMappingInput);
         }
         catch (yamlError) {
             try {
-                sourceMapping = JSON.parse(sourceMappingInput);
+                fileMapping = JSON.parse(fileMappingInput);
             }
             catch (jsonError) {
-                throw new Error(`Failed to parse 'sources' input as either YAML or JSON. Please check the format. Error: ${yamlError.message}`);
+                throw new Error(`Failed to parse 'files' input as either YAML or JSON. Please check the format. Error: ${yamlError.message}`);
             }
         }
-        if (!Array.isArray(sourceMapping) || sourceMapping.length === 0) {
-            throw new Error('Source mapping must be a non-empty array');
+        if (!Array.isArray(fileMapping) || fileMapping.length === 0) {
+            throw new Error('File mapping must be a non-empty array');
         }
-        for (const [index, mapping] of sourceMapping.entries()) {
+        for (const [index, mapping] of fileMapping.entries()) {
             if (!mapping.from || !mapping.to) {
-                throw new Error(`Source mapping at index ${index} is missing required 'from' or 'to' field`);
+                throw new Error(`File mapping at index ${index} is missing required 'source' or 'destination' field`);
             }
         }
         const options = {
             repository,
-            sources: sourceMapping,
+            openapi: fileMapping,
             token,
             branch,
             autoMerge
@@ -36775,7 +36775,7 @@ async function cloneRepository(options) {
         }
     }
     const repoUrl = `https://x-access-token:${options.token}@github.com/${options.repository}.git`;
-    const repoDir = path.join(process.env.RUNNER_TEMP || '/tmp', 'temp-fern-config');
+    const repoDir = 'temp-fern-config';
     core.info(`Cloning repository ${options.repository} to ${repoDir}`);
     await io.mkdirP(repoDir);
     try {
@@ -36853,15 +36853,10 @@ async function setupBranch(branchName, exists) {
             await exec.exec('git', ['checkout', branchName]);
             // Pull latest changes from remote to avoid conflicts
             await exec.exec('git', ['pull', 'origin', branchName], { silent: true });
-            // Clean the working directory to ensure we start fresh
-            core.info('Cleaning working directory...');
-            await exec.exec('git', ['rm', '-rf', '.'], { silent: true, ignoreReturnCode: true });
         }
         else {
             core.info(`Branch ${branchName} does not exist. Creating it.`);
-            // Start with a clean branch
-            await exec.exec('git', ['checkout', '--orphan', branchName]);
-            await exec.exec('git', ['rm', '-rf', '.'], { silent: true, ignoreReturnCode: true });
+            await exec.exec('git', ['checkout', '-b', branchName]);
         }
     }
     catch (error) {
@@ -36872,76 +36867,21 @@ async function copyMappedFiles(options) {
     core.info('Copying mapped source files to destination locations');
     const sourceRepoRoot = path.resolve(process.env.GITHUB_WORKSPACE || '');
     const destRepoRoot = path.resolve('.');
-    // Track if any files were copied
-    let filesCopied = false;
-    for (const mapping of options.sources) {
+    for (const mapping of options.openapi) {
         const sourcePath = path.join(sourceRepoRoot, mapping.from);
         const destPath = path.join(destRepoRoot, mapping.to);
         if (!fs.existsSync(sourcePath)) {
-            throw new Error(`Source path ${mapping.from} not found`);
-        }
-        const sourceStats = fs.statSync(sourcePath);
-        if (sourceStats.isDirectory()) {
-            // Handle directory copying
-            await copyDirectory(sourcePath, destPath, mapping.exclude);
-            core.info(`Copied directory ${mapping.from} to ${mapping.to}`);
-            filesCopied = true;
+            throw new Error(`Source file ${mapping.from} not found`);
         }
         else {
-            // Handle single file copying
             await io.mkdirP(path.dirname(destPath));
             fs.copyFileSync(sourcePath, destPath);
-            core.info(`Copied file ${mapping.from} to ${mapping.to}`);
-            filesCopied = true;
-        }
-    }
-    if (!filesCopied) {
-        throw new Error('No files were copied. Please check your source mappings.');
-    }
-}
-async function copyDirectory(sourcePath, destPath, exclude) {
-    await io.mkdirP(destPath);
-    const files = fs.readdirSync(sourcePath);
-    for (const file of files) {
-        const sourceFilePath = path.join(sourcePath, file);
-        const destFilePath = path.join(destPath, file);
-        // Skip if file matches any exclude pattern
-        if (exclude && exclude.some(pattern => {
-            const fullPattern = path.resolve(pattern);
-            return sourceFilePath.startsWith(fullPattern);
-        })) {
-            continue;
-        }
-        const stats = fs.statSync(sourceFilePath);
-        if (stats.isDirectory()) {
-            await copyDirectory(sourceFilePath, destFilePath, exclude);
-        }
-        else {
-            await io.mkdirP(path.dirname(destFilePath));
-            fs.copyFileSync(sourceFilePath, destFilePath);
         }
     }
 }
 async function commitChanges() {
-    try {
-        // Stage all changes including deletions
-        await exec.exec('git', ['add', '-A'], { silent: true });
-        // Check if there are changes to commit
-        const status = await exec.getExecOutput('git', ['status', '--porcelain'], { silent: true });
-        if (!status.stdout.trim()) {
-            throw new Error('No changes detected after copying files. This is unexpected as files were copied.');
-        }
-        await exec.exec('git', ['commit', '-m', `Sync OpenAPI files from ${github.context.repo.repo}`], { silent: true });
-        core.info('Changes committed successfully');
-    }
-    catch (error) {
-        if (error instanceof Error) {
-            throw error;
-        }
-        else {
-            throw new Error('Failed to commit changes');
-        }
-    }
+    await exec.exec('git', ['add', '.'], { silent: true });
+    await exec.exec('git', ['commit', '-m', `Sync OpenAPI files from ${github.context.repo.repo}`], { silent: true });
 }
 async function hasDifferenceWithRemote(branchName) {
     try {
