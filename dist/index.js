@@ -36806,11 +36806,11 @@ async function syncChanges(options) {
         const doesBranchExist = await branchExists(owner, repo, workingBranch, octokit);
         await setupBranch(workingBranch, doesBranchExist);
         await copyMappedFiles(options);
-        const diff = await exec.getExecOutput('git', ['status', '--porcelain']);
-        if (!diff.stdout.trim()) {
-            core.info('No changes detected. Skipping further actions.');
-            return;
-        }
+        // const diff = await exec.getExecOutput('git', ['status', '--porcelain']);
+        // if (!diff.stdout.trim()) {
+        //   core.info('No changes detected. Skipping further actions.');
+        //   return;
+        // }
         await commitChanges();
         const pushedChanges = await pushChanges(workingBranch, options);
         if (!pushedChanges)
