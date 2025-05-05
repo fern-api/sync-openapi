@@ -37158,15 +37158,16 @@ async function processSourceMappings(options) {
         }
         const sourceStats = fs.statSync(sourcePath);
         if (sourceStats.isDirectory()) {
+            core.info(`Syncing directory ${mapping.from}`);
             await syncDirectory(sourcePath, destPath, mapping.exclude);
         }
         else {
+            core.info(`Syncing file ${mapping.from}`);
             await syncFile(sourcePath, destPath);
         }
     }
 }
 async function syncDirectory(sourceDirPath, destDirPath, excludePatterns) {
-    core.info(`Syncing directory: ${sourceDirPath} to ${destDirPath}`);
     await io.mkdirP(destDirPath);
     // Get all files in source directory recursively
     const files = glob.sync('**/*', {
@@ -37178,7 +37179,7 @@ async function syncDirectory(sourceDirPath, destDirPath, excludePatterns) {
         const sourceFilePath = path.join(sourceDirPath, file);
         const destFilePath = path.join(destDirPath, file);
         if (excludePatterns && isExcluded(sourceFilePath, excludePatterns)) {
-            core.info(`Skipping excluded file: ${sourceFilePath}`);
+            core.info(`Skipping ${file}`);
             continue;
         }
         await syncFile(sourceFilePath, destFilePath);

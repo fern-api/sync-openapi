@@ -5,15 +5,18 @@ import * as io from '@actions/io';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import * as glob from 'glob';
+import { minimatch } from 'minimatch';
 
-interface FileMapping {
-  source: string;
-  destination: string;
+interface SourceMapping {
+  from: string;
+  to: string;
+  exclude?: string[];
 }
 
 interface SyncOptions {
   repository: string;
-  openapi: FileMapping[];
+  mappings: SourceMapping[];
   token?: string;
   branch?: string;
   autoMerge?: boolean;
@@ -26,14 +29,14 @@ export async function run(): Promise<void> {
     const branch = core.getInput('branch', { required: true });
     const autoMerge = core.getBooleanInput('auto_merge') || false;
     
-    const fileMappingInput = core.getInput('files', { required: true });
-    let fileMapping: FileMapping[];
+    const fileMappingInput = core.getInput('sources', { required: true });
+    let fileMapping: SourceMapping[];
     
     try {
-      fileMapping = yaml.load(fileMappingInput) as FileMapping[];
+      fileMapping = yaml.load(fileMappingInput) as SourceMapping[];
     } catch (yamlError) {
       try {
-        fileMapping = JSON.parse(fileMappingInput) as FileMapping[];
+        fileMapping = JSON.parse(fileMappingInput) as SourceMapping[];
       } catch (jsonError) {
         throw new Error(`Failed to parse 'files' input as either YAML or JSON. Please check the format. Error: ${(yamlError as Error).message}`);
       }
@@ -44,14 +47,14 @@ export async function run(): Promise<void> {
     }
     
     for (const [index, mapping] of fileMapping.entries()) {
-      if (!mapping.source || !mapping.destination) {
+      if (!mapping.from || !mapping.to) {
         throw new Error(`File mapping at index ${index} is missing required 'source' or 'destination' field`);
       }
     }
     
     const options: SyncOptions = {
       repository,
-      openapi: fileMapping,
+      mappings: fileMapping,
       token,
       branch,
       autoMerge
@@ -129,9 +132,9 @@ async function syncChanges(options: SyncOptions): Promise<void> {
     const doesBranchExist = await branchExists(owner, repo, workingBranch, octokit);
     await setupBranch(workingBranch, doesBranchExist);
 
-    await copyMappedFiles(options);
+    await processSourceMappings(options);
     
-    const diff = await exec.getExecOutput('git', ['status', '--porcelain']);
+    const diff = await exec.getExecOutput('git', ['status', '--porcelain'], {silent: true});
   
     if (!diff.stdout.trim()) {
       core.info('No changes detected. Skipping further actions.');
@@ -179,7 +182,7 @@ async function setupBranch(branchName: string, exists: boolean): Promise<void> {
       core.info(`Branch ${branchName} exists. Checking it out.`);
       await exec.exec('git', ['checkout', branchName]);
       // Pull latest changes from remote to avoid conflicts
-      await exec.exec('git', ['pull', 'origin', branchName], {silent: true});
+      await exec.exec('git', ['pull', 'origin', branchName], { silent: true });
     } else {
       core.info(`Branch ${branchName} does not exist. Creating it.`);
       await exec.exec('git', ['checkout', '-b', branchName]);
@@ -189,24 +192,73 @@ async function setupBranch(branchName: string, exists: boolean): Promise<void> {
   }
 }
 
-async function copyMappedFiles(options: SyncOptions): Promise<void> {
-  core.info('Copying mapped source files to destination locations');
+async function processSourceMappings(options: SyncOptions): Promise<void> {
+  core.info('Processing source mappings');
   
   const sourceRepoRoot = path.resolve(process.env.GITHUB_WORKSPACE || '');
   const destRepoRoot = path.resolve('.');
   
-  for (const mapping of options.openapi) {
-    const sourcePath = path.join(sourceRepoRoot, mapping.source);
-    const destPath = path.join(destRepoRoot, mapping.destination);
-          
+  for (const mapping of options.mappings) {
+    const sourcePath = path.join(sourceRepoRoot, mapping.from);
+    const destPath = path.join(destRepoRoot, mapping.to);
+    
+    // Check if source exists
     if (!fs.existsSync(sourcePath)) {
-      throw new Error(`Source file ${mapping.source} not found`);
+      throw new Error(`Source path ${mapping.from} not found`);
+    }
+    
+    const sourceStats = fs.statSync(sourcePath);
+    
+    if (sourceStats.isDirectory()) {
+      core.info(`Syncing directory ${mapping.from}`);
+      await syncDirectory(sourcePath, destPath, mapping.exclude);
     } else {
-      await io.mkdirP(path.dirname(destPath));
-      fs.copyFileSync(sourcePath, destPath);
+      core.info(`Syncing file ${mapping.from}`);
+      await syncFile(sourcePath, destPath);
     }
   }
 }
+
+
+async function syncDirectory(sourceDirPath: string, destDirPath: string, excludePatterns?: string[]): Promise<void> {
+  
+  await io.mkdirP(destDirPath);
+  
+  // Get all files in source directory recursively
+  const files = glob.sync('**/*', { 
+    cwd: sourceDirPath, 
+    nodir: true,
+    absolute: false
+  });
+  
+  for (const file of files) {
+    const sourceFilePath = path.join(sourceDirPath, file);
+    const destFilePath = path.join(destDirPath, file);
+    
+    if (excludePatterns && isExcluded(sourceFilePath, excludePatterns)) {
+      core.info(`Skipping ${file}`);
+      continue;
+    }
+    
+    await syncFile(sourceFilePath, destFilePath);
+  }
+}
+
+async function syncFile(sourceFilePath: string, destFilePath: string): Promise<void> {
+  core.info(`Syncing file: ${sourceFilePath} to ${destFilePath}`);
+  await io.mkdirP(path.dirname(destFilePath));
+  fs.copyFileSync(sourceFilePath, destFilePath);
+}
+
+
+function isExcluded(filePath: string, excludePatterns: string[]): boolean {
+  const sourceRepoRoot = path.resolve(process.env.GITHUB_WORKSPACE || '');
+
+  const relativePath = path.relative(sourceRepoRoot, filePath);
+
+  return excludePatterns.some(pattern => minimatch(relativePath, pattern));
+}
+
 
 async function commitChanges(): Promise<void> {
   await exec.exec('git', ['add', '.'], { silent: true });
@@ -221,7 +273,7 @@ async function hasDifferenceWithRemote(branchName: string): Promise<boolean> {
     
     return !!diff.stdout.trim();
   } catch (error) {
-    core.info(`Could not fetch remote branch, assuming first push: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    core.info(`Could not fetch remote branch, assuming this is the first push to new branch.`);
     return true;
   }
 }
