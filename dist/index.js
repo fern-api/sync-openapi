@@ -36713,30 +36713,30 @@ async function run() {
         const token = core.getInput('token') || process.env.GITHUB_TOKEN;
         const branch = core.getInput('branch', { required: true });
         const autoMerge = core.getBooleanInput('auto_merge') || false;
-        const fileMappingInput = core.getInput('files', { required: true });
-        let fileMapping;
+        const sourceMappingInput = core.getInput('sources', { required: true });
+        let sourceMapping;
         try {
-            fileMapping = yaml.load(fileMappingInput);
+            sourceMapping = yaml.load(sourceMappingInput);
         }
         catch (yamlError) {
             try {
-                fileMapping = JSON.parse(fileMappingInput);
+                sourceMapping = JSON.parse(sourceMappingInput);
             }
             catch (jsonError) {
-                throw new Error(`Failed to parse 'files' input as either YAML or JSON. Please check the format. Error: ${yamlError.message}`);
+                throw new Error(`Failed to parse 'sources' input as either YAML or JSON. Please check the format. Error: ${yamlError.message}`);
             }
         }
-        if (!Array.isArray(fileMapping) || fileMapping.length === 0) {
-            throw new Error('File mapping must be a non-empty array');
+        if (!Array.isArray(sourceMapping) || sourceMapping.length === 0) {
+            throw new Error('Source mapping must be a non-empty array');
         }
-        for (const [index, mapping] of fileMapping.entries()) {
-            if (!mapping.source || !mapping.destination) {
-                throw new Error(`File mapping at index ${index} is missing required 'source' or 'destination' field`);
+        for (const [index, mapping] of sourceMapping.entries()) {
+            if (!mapping.from || !mapping.to) {
+                throw new Error(`Source mapping at index ${index} is missing required 'from' or 'to' field`);
             }
         }
         const options = {
             repository,
-            openapi: fileMapping,
+            sources: sourceMapping,
             token,
             branch,
             autoMerge
@@ -36867,15 +36867,44 @@ async function copyMappedFiles(options) {
     core.info('Copying mapped source files to destination locations');
     const sourceRepoRoot = path.resolve(process.env.GITHUB_WORKSPACE || '');
     const destRepoRoot = path.resolve('.');
-    for (const mapping of options.openapi) {
-        const sourcePath = path.join(sourceRepoRoot, mapping.source);
-        const destPath = path.join(destRepoRoot, mapping.destination);
+    for (const mapping of options.sources) {
+        const sourcePath = path.join(sourceRepoRoot, mapping.from);
+        const destPath = path.join(destRepoRoot, mapping.to);
         if (!fs.existsSync(sourcePath)) {
-            throw new Error(`Source file ${mapping.source} not found`);
+            throw new Error(`Source path ${mapping.from} not found`);
+        }
+        const sourceStats = fs.statSync(sourcePath);
+        if (sourceStats.isDirectory()) {
+            // Handle directory copying
+            await copyDirectory(sourcePath, destPath, mapping.exclude);
         }
         else {
+            // Handle single file copying
             await io.mkdirP(path.dirname(destPath));
             fs.copyFileSync(sourcePath, destPath);
+        }
+    }
+}
+async function copyDirectory(sourcePath, destPath, exclude) {
+    await io.mkdirP(destPath);
+    const files = fs.readdirSync(sourcePath);
+    for (const file of files) {
+        const sourceFilePath = path.join(sourcePath, file);
+        const destFilePath = path.join(destPath, file);
+        // Skip if file matches any exclude pattern
+        if (exclude && exclude.some(pattern => {
+            const fullPattern = path.resolve(pattern);
+            return sourceFilePath.startsWith(fullPattern);
+        })) {
+            continue;
+        }
+        const stats = fs.statSync(sourceFilePath);
+        if (stats.isDirectory()) {
+            await copyDirectory(sourceFilePath, destFilePath, exclude);
+        }
+        else {
+            await io.mkdirP(path.dirname(destFilePath));
+            fs.copyFileSync(sourceFilePath, destFilePath);
         }
     }
 }

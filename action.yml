@@ -5,8 +5,8 @@ inputs:
   repository:
     description: 'Target repository in format org/repo'
     required: true
-  files:
-    description: 'YAML array of OpenAPI mappings with source and destination paths'
+  sources:
+    description: 'YAML array of source mappings with from, to, and optional exclude paths'
     required: true
   token:
     description: 'GitHub token for authentication (requires read access to source repo, write access to target repo)'
