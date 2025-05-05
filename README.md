@@ -1,11 +1,11 @@
 # sync-openapi
 
-A GitHub Action to sync files from your source repository to a target repository (like fern-config).
+A GitHub Action to sync files/folders from your source repository to a target repository (like fern-config).
 
 ## Usage
 
 1. In your your source repo, create a file named `sync-openapi.yml` in `.github/workflows/`. 
-2. Include the following contents in the `sync-openapi.yml` you just created: 
+2. Include the following contents in `sync-openapi.yml`: 
 
 ```yaml
 name: Sync OpenAPI Specs # can be customized
@@ -24,16 +24,19 @@ jobs:
         with:
           repository: <your-org>/<your-target-repo>
           token: ${{ secrets.<PAT_TOKEN_NAME> }}
-          files: |
-            - source: path/to/file1/in/this/repo.yml # note: all file paths are relative to repository root
-              destination: path/to/file1/in/destination/repo.yml
-            - source: path/to/file2/in/this/repo.yml
-              destination: path/to/file2/in/destination/repo.yml
-
+          sources:                                # all paths are relative to source repository root
+            - from: path/to/source/dir            # supports folder syncing
+              to: path/to/target/dir    
+              exclude:                            # optional
+                - path/to/file/to/exclude.yaml    # supports individual file exclusion
+                - path/to/dir/to/exclude/**       # supports glob-based pattern matching
+                - path/to/files/*_test.yaml
+            - from: path/to/source/file.yaml      # supports individual file syncing
+              to: path/to/target/file.yaml    
                 ....
 
           branch: main
-          auto_merge: true # note: branch = main with auto_merge = false will cause an error
+          auto_merge: true                        # you MUST use auto_merge: true with branch: main
 
 ```
 
@@ -42,11 +45,12 @@ jobs:
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `repository` | Target repository in format `org/repo` | Yes | - |
-| `files` | Array of mappings with source and destination paths | Yes | - |
+| `sources` | Array of mappings with from, to, and (optional) exclude fields | Yes | - |
 | `token` | GitHub token for authentication | No | `${{ github.token }}` |
 | `branch` | Branch to push to in the target repository | Yes | - |
 | `auto_merge` | Will push directly to the specified branch when `true`, will create a PR from the specified base branch onto main if `false`. | No | `false` |
 
+**Note: you must set `auto_merge: true` when using `branch: main`**
 
 ## Required Permissions
 
