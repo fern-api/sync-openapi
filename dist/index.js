@@ -37019,7 +37019,6 @@ async function run() {
     }
 }
 async function updateFromSourceFlow(token, branch, autoMerge) {
-    core.info('Executing update from source flow');
     if (!token) {
         throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');
     }
@@ -37054,7 +37053,6 @@ async function updateFromSourceFlow(token, branch, autoMerge) {
     }
 }
 async function syncFilesFlow(token, branch, autoMerge) {
-    core.info('Executing sync files flow');
     const repository = core.getInput('repository', { required: true });
     const fileMappingInput = core.getInput('sources', { required: true });
     let fileMapping;

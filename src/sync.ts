@@ -53,9 +53,7 @@ export async function run(): Promise<void> {
   }
 }
 
-async function updateFromSourceFlow(token: string, branch: string, autoMerge: boolean): Promise<void> {
-  core.info('Executing update from source flow');
-  
+async function updateFromSourceFlow(token: string, branch: string, autoMerge: boolean): Promise<void> {  
   if (!token) {
     throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');
   }
@@ -98,8 +96,6 @@ async function updateFromSourceFlow(token: string, branch: string, autoMerge: bo
 }
 
 async function syncFilesFlow(token: string, branch: string, autoMerge: boolean): Promise<void> {
-  core.info('Executing sync files flow');
-  
   const repository = core.getInput('repository', { required: true });
   const fileMappingInput = core.getInput('sources', { required: true });
   let fileMapping: SourceMapping[];
