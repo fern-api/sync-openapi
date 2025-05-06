@@ -33,9 +33,9 @@ jobs:
             - from: path/to/source/dir            # supports folder syncing
               to: path/to/target/dir    
               exclude:                            # optional
-                - path/to/file/to/exclude.yaml    # supports individual file exclusion
-                - path/to/dir/to/exclude/**       # supports glob-based pattern matching
-                - path/to/files/*_test.yaml
+                - "path/to/file/to/exclude.yaml"  # supports individual file exclusion
+                - "path/to/dir/to/exclude/**"     # supports glob-based pattern matching
+                - "path/to/files/*_test.yaml"
             - from: path/to/source/file.yaml      # supports individual file syncing
               to: path/to/target/file.yaml    
                 ....
