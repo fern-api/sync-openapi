@@ -25,7 +25,7 @@ interface SyncOptions {
 
 export async function run(): Promise<void> {
   try {
-    const token = core.getInput('token') || process.env.GITHUB_TOKEN;
+    const token = process.env.GITHUB_TOKEN || core.getInput('token');
     let branch = core.getInput('branch', { required: true });
     const autoMerge = core.getBooleanInput('auto_merge') || false;
     const addTimestamp = core.getBooleanInput('add_timestamp') || true;
