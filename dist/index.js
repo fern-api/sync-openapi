@@ -37039,6 +37039,8 @@ async function updateFromSourceFlow(token, branch, autoMerge) {
         await exec.exec('git', ['add', '.'], { silent: true });
         await exec.exec('git', ['commit', '-m', 'Update API specifications with fern api update'], { silent: true });
         core.info(`Pushing changes to branch: ${branch}`);
+        const repoUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+        await exec.exec('git', ['remote', 'set-url', 'origin', repoUrl]);
         await exec.exec('git', ['push', 'origin', branch], { silent: true });
         if (!autoMerge) {
             const octokit = github.getOctokit(token);
