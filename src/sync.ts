@@ -40,9 +40,9 @@ export async function run(): Promise<void> {
     }
 
     if (updateFromSource) {
-      await updateFromSourceFlow(token, branch, autoMerge);
+      await updateFromSourceSpec(token, branch, autoMerge);
     } else {
-      await syncFilesFlow(token, branch, autoMerge);
+      await updateTargetSpec(token, branch, autoMerge);
     }
   } catch (error) {
     if (error instanceof Error) {
@@ -53,14 +53,13 @@ export async function run(): Promise<void> {
   }
 }
 
-async function updateFromSourceFlow(token: string, branch: string, autoMerge: boolean): Promise<void> {  
+async function updateFromSourceSpec(token: string, branch: string, autoMerge: boolean): Promise<void> {  
   if (!token) {
     throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');
   }
   
   const owner = github.context.repo.owner;
   const repo = github.context.repo.repo;
-  const repository = `${owner}/${repo}`;
   
   try {
     await exec.exec('git', ['config', 'user.name', 'github-actions']);
@@ -96,7 +95,7 @@ async function updateFromSourceFlow(token: string, branch: string, autoMerge: bo
   }
 }
 
-async function syncFilesFlow(token: string, branch: string, autoMerge: boolean): Promise<void> {
+async function updateTargetSpec(token: string, branch: string, autoMerge: boolean): Promise<void> {
   const repository = core.getInput('repository', { required: true });
   const fileMappingInput = core.getInput('sources', { required: true });
   let fileMapping: SourceMapping[];

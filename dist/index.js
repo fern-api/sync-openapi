@@ -37003,10 +37003,10 @@ async function run() {
             throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');
         }
         if (updateFromSource) {
-            await updateFromSourceFlow(token, branch, autoMerge);
+            await updateFromSourceSpec(token, branch, autoMerge);
         }
         else {
-            await syncFilesFlow(token, branch, autoMerge);
+            await updateTargetSpec(token, branch, autoMerge);
         }
     }
     catch (error) {
@@ -37018,13 +37018,12 @@ async function run() {
         }
     }
 }
-async function updateFromSourceFlow(token, branch, autoMerge) {
+async function updateFromSourceSpec(token, branch, autoMerge) {
     if (!token) {
         throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');
     }
     const owner = github.context.repo.owner;
     const repo = github.context.repo.repo;
-    const repository = `${owner}/${repo}`;
     try {
         await exec.exec('git', ['config', 'user.name', 'github-actions']);
         await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
@@ -37052,7 +37051,7 @@ async function updateFromSourceFlow(token, branch, autoMerge) {
         throw new Error(`Failed to update from source: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 }
-async function syncFilesFlow(token, branch, autoMerge) {
+async function updateTargetSpec(token, branch, autoMerge) {
     const repository = core.getInput('repository', { required: true });
     const fileMappingInput = core.getInput('sources', { required: true });
     let fileMapping;
