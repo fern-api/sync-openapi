@@ -36997,7 +36997,7 @@ async function run() {
         const addTimestamp = core.getBooleanInput('add_timestamp') || true;
         const updateFromSource = core.getBooleanInput('update_from_source') || false;
         if (addTimestamp) {
-            branch = `${branch}-${new Date().toISOString()}`;
+            branch = `${branch}-${new Date().toISOString().replace(/[:.]/g, '-')}`;
         }
         if (!token) {
             throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');

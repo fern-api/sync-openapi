@@ -20,54 +20,139 @@ interface SyncOptions {
   token?: string;
   branch?: string;
   autoMerge?: boolean;
+  updateFromSource?: boolean;
 }
 
 export async function run(): Promise<void> {
   try {
-    const repository = core.getInput('repository', { required: true });
     const token = core.getInput('token') || process.env.GITHUB_TOKEN;
-    const branch = core.getInput('branch', { required: true });
+    let branch = core.getInput('branch', { required: true });
     const autoMerge = core.getBooleanInput('auto_merge') || false;
-    
-    const fileMappingInput = core.getInput('sources', { required: true });
-    let fileMapping: SourceMapping[];
-    
-    try {
-      fileMapping = yaml.load(fileMappingInput) as SourceMapping[];
-    } catch (yamlError) {
-      try {
-        fileMapping = JSON.parse(fileMappingInput) as SourceMapping[];
-      } catch (jsonError) {
-        throw new Error(`Failed to parse 'files' input as either YAML or JSON. Please check the format. Error: ${(yamlError as Error).message}`);
-      }
+    const addTimestamp = core.getBooleanInput('add_timestamp') || true;
+    const updateFromSource = core.getBooleanInput('update_from_source') || false;
+
+    if (addTimestamp) {
+      branch = `${branch}-${new Date().toISOString().replace(/[:.]/g, '-')}`;
     }
     
-    if (!Array.isArray(fileMapping) || fileMapping.length === 0) {
-      throw new Error('File mapping must be a non-empty array');
+    if (!token) {
+      throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');
     }
-    
-    for (const [index, mapping] of fileMapping.entries()) {
-      if (!mapping.from || !mapping.to) {
-        throw new Error(`File mapping at index ${index} is missing required 'source' or 'destination' field`);
-      }
+
+    if (updateFromSource) {
+      await updateFromSourceFlow(token, branch, autoMerge);
+    } else {
+      await syncFilesFlow(token, branch, autoMerge);
     }
-    
-    const options: SyncOptions = {
-      repository,
-      mappings: fileMapping,
-      token,
-      branch,
-      autoMerge
-    };    
-    await cloneRepository(options);
-    
-    await syncChanges(options);
   } catch (error) {
     if (error instanceof Error) {
       core.setFailed(error.message);
     } else {
       core.setFailed('An unknown error occurred');
     }
+  }
+}
+
+async function updateFromSourceFlow(token: string, branch: string, autoMerge: boolean): Promise<void> {
+  core.info('Executing update from source flow');
+  
+  if (!token) {
+    throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');
+  }
+  
+  const owner = github.context.repo.owner;
+  const repo = github.context.repo.repo;
+  const repository = `${owner}/${repo}`;
+  
+  try {
+    await exec.exec('git', ['config', 'user.name', 'github-actions']);
+    await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
+    
+    core.info(`Creating and checking out branch: ${branch}`);
+    await exec.exec('git', ['checkout', '-b', branch]);
+    
+    await runFernApiUpdate();
+    
+    const diff = await exec.getExecOutput('git', ['status', '--porcelain'], {silent: true});
+    
+    if (!diff.stdout.trim()) {
+      core.info('No changes detected from fern api update. Skipping further actions.');
+      return;
+    }
+    
+    await exec.exec('git', ['add', '.'], { silent: true });
+    await exec.exec('git', ['commit', '-m', 'Update API specifications with fern api update'], { silent: true });
+    
+    core.info(`Pushing changes to branch: ${branch}`);
+    await exec.exec('git', ['push', 'origin', branch], { silent: true });
+    
+    if (!autoMerge) {
+      const octokit = github.getOctokit(token);
+      await createPR(octokit, owner, repo, branch, github.context.ref.replace('refs/heads/', ''), true);
+    } else {
+      core.info(`Changes pushed directly to branch '${branch}' because auto-merge is enabled.`);
+    }
+  } catch (error) {
+    throw new Error(`Failed to update from source: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function syncFilesFlow(token: string, branch: string, autoMerge: boolean): Promise<void> {
+  core.info('Executing sync files flow');
+  
+  const repository = core.getInput('repository', { required: true });
+  const fileMappingInput = core.getInput('sources', { required: true });
+  let fileMapping: SourceMapping[];
+  
+  try {
+    fileMapping = yaml.load(fileMappingInput) as SourceMapping[];
+  } catch (yamlError) {
+    try {
+      fileMapping = JSON.parse(fileMappingInput) as SourceMapping[];
+    } catch (jsonError) {
+      throw new Error(`Failed to parse 'sources' input as either YAML or JSON. Please check the format. Error: ${(yamlError as Error).message}`);
+    }
+  }
+  
+  if (!Array.isArray(fileMapping) || fileMapping.length === 0) {
+    throw new Error('File mapping must be a non-empty array');
+  }
+  
+  for (const [index, mapping] of fileMapping.entries()) {
+    if (!mapping.from || !mapping.to) {
+      throw new Error(`File mapping at index ${index} is missing required 'from' or 'to' field`);
+    }
+  }
+  
+  const options: SyncOptions = {
+    repository,
+    mappings: fileMapping,
+    token,
+    branch,
+    autoMerge
+  };
+  
+  await cloneRepository(options);
+  await syncChanges(options);
+}
+
+async function runFernApiUpdate(): Promise<void> {
+  try {
+    core.info('Running "fern api update" command');
+    
+    try {
+      await exec.exec('fern', ['--version'], { silent: true });
+      core.info('Fern CLI is already installed');
+    } catch (error) {
+      core.info('Fern CLI not found. Installing Fern CLI...');
+      await exec.exec('npm', ['install', '-g', 'fern-api']);
+    }
+    
+    await exec.exec('fern', ['api', 'update']);
+    
+    core.info('Fern API update completed');
+  } catch (error) {
+    throw new Error(`Failed to run "fern api update": ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -146,14 +231,13 @@ async function syncChanges(options: SyncOptions): Promise<void> {
     const pushedChanges = await pushChanges(workingBranch, options);
     if (!pushedChanges) return;
     
-    // Only proceed with PR creation if auto-merge is false
     if (!options.autoMerge) {
       const existingPRNumber = await prExists(owner, repo, workingBranch, octokit);
       
       if (existingPRNumber) {
         await updatePR(octokit, owner, repo, existingPRNumber);
       } else {
-        await createPR(octokit, owner, repo, workingBranch, 'main');
+        await createPR(octokit, owner, repo, workingBranch, 'main', false);
       }
     } else {
       core.info(`Changes pushed directly to branch '${workingBranch}' because auto-merge is enabled.`);
@@ -181,7 +265,6 @@ async function setupBranch(branchName: string, exists: boolean): Promise<void> {
     if (exists) {
       core.info(`Branch ${branchName} exists. Checking it out.`);
       await exec.exec('git', ['checkout', branchName]);
-      // Pull latest changes from remote to avoid conflicts
       await exec.exec('git', ['pull', 'origin', branchName], { silent: true });
     } else {
       core.info(`Branch ${branchName} does not exist. Creating it.`);
@@ -202,7 +285,6 @@ async function processSourceMappings(options: SyncOptions): Promise<void> {
     const sourcePath = path.join(sourceRepoRoot, mapping.from);
     const destPath = path.join(destRepoRoot, mapping.to);
     
-    // Check if source exists
     if (!fs.existsSync(sourcePath)) {
       throw new Error(`Source path ${mapping.from} not found`);
     }
@@ -219,12 +301,10 @@ async function processSourceMappings(options: SyncOptions): Promise<void> {
   }
 }
 
-
 async function syncDirectory(sourceDirPath: string, destDirPath: string, excludePatterns?: string[]): Promise<void> {
   
   await io.mkdirP(destDirPath);
   
-  // Get all files in source directory recursively
   const files = glob.sync('**/*', { 
     cwd: sourceDirPath, 
     nodir: true,
@@ -249,15 +329,11 @@ async function syncFile(sourceFilePath: string, destFilePath: string): Promise<v
   fs.copyFileSync(sourceFilePath, destFilePath);
 }
 
-
 function isExcluded(filePath: string, excludePatterns: string[]): boolean {
   const sourceRepoRoot = path.resolve(process.env.GITHUB_WORKSPACE || '');
-
   const relativePath = path.relative(sourceRepoRoot, filePath);
-
   return excludePatterns.some(pattern => minimatch(relativePath, pattern));
 }
-
 
 async function commitChanges(): Promise<void> {
   await exec.exec('git', ['add', '.'], { silent: true });
@@ -322,16 +398,24 @@ async function updatePR(octokit: any, owner: string, repo: string, prNumber: num
 }
 
 // Create a new PR
-async function createPR(octokit: any, owner: string, repo: string, branchName: string, targetBranch: string): Promise<any> {
+async function createPR(octokit: any, owner: string, repo: string, branchName: string, targetBranch: string, isFromFern: boolean): Promise<any> {
   core.info(`Creating new PR from ${branchName} to ${targetBranch}`);
+  
+  let prTitle = isFromFern ? 
+    'Update API specifications with fern api update' : 
+    'Update OpenAPI specifications';
+  
+  let prBody = isFromFern ? 
+    'Update API specifications by running fern api update.' : 
+    'Update OpenAPI specifications based on changes in the source repository.';
   
   const prResponse = await octokit.rest.pulls.create({
     owner,
     repo,
-    title: 'Update OpenAPI specifications',
+    title: prTitle,
     head: branchName,
     base: targetBranch,
-    body: 'Update OpenAPI specifications based on changes in the source repository.'
+    body: prBody
   });
   
   core.info(`Pull request created: ${prResponse.data.html_url}`);
