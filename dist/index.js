@@ -37041,7 +37041,7 @@ async function updateFromSourceFlow(token, branch, autoMerge) {
         core.info(`Pushing changes to branch: ${branch}`);
         const repoUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
         await exec.exec('git', ['remote', 'set-url', 'origin', repoUrl]);
-        await exec.exec('git', ['push', 'origin', branch], { silent: true });
+        await exec.exec('git', ['push', '--force', '--verbose', 'origin', branch], { silent: false });
         if (!autoMerge) {
             const octokit = github.getOctokit(token);
             await createPR(octokit, owner, repo, branch, github.context.ref.replace('refs/heads/', ''), true);

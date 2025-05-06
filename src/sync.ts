@@ -85,7 +85,7 @@ async function updateFromSourceFlow(token: string, branch: string, autoMerge: bo
     const repoUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
     await exec.exec('git', ['remote', 'set-url', 'origin', repoUrl]);
 
-    await exec.exec('git', ['push', 'origin', branch], { silent: true });
+    await exec.exec('git', ['push', '--force', '--verbose', 'origin', branch], { silent: false });
     
     if (!autoMerge) {
       const octokit = github.getOctokit(token);
