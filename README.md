@@ -9,11 +9,14 @@ A GitHub Action to sync files/folders from your source repository to a target re
 
 ```yaml
 name: Sync OpenAPI Specs # can be customized
-on:
-  workflow_dispatch:
-  push:
+on:                                              # additional custom triggers can be configured, examples below
+  workflow_dispatch:                             # manual dispatch
+  push:                                          
     branches:
-      - main
+      - main                                     # on push to main
+  schedule:
+    - cron: '0 3 * * *'                          # everyday at 3:00 AM UTC
+
 jobs:
   sync:
     runs-on: ubuntu-latest
