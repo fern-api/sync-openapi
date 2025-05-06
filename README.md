@@ -4,6 +4,8 @@ A GitHub Action to sync files/folders from your source repository to a target re
 
 ## Usage
 
+### Case 1: Sync files/folders between repositories
+
 1. In your your source repo, create a file named `sync-openapi.yml` in `.github/workflows/`. 
 2. Include the following contents in `sync-openapi.yml`: 
 
@@ -23,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Sync OpenAPI spec to target repo
-        uses: fern-api/sync-openapi@v0
+        uses: fern-api/sync-openapi@v2
         with:
           repository: <your-org>/<your-target-repo>
           token: ${{ secrets.<PAT_TOKEN_NAME> }}
@@ -43,15 +45,53 @@ jobs:
 
 ```
 
+### Case 2: Sync specs using `fern api update`
+
+1. In your your source repo, create a file named `sync-openapi.yml` in `.github/workflows/`. 
+2. Include the following contents in `sync-openapi.yml`: 
+
+```yaml
+name: Sync OpenAPI Specs # can be customized
+on:                                              # additional custom triggers can be configured, examples below
+  workflow_dispatch:                             # manual dispatch
+  push:                                          
+    branches:
+      - main                                     # on push to main
+  schedule:
+    - cron: '0 3 * * *'                          # everyday at 3:00 AM UTC
+
+jobs:
+  update-from-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.OPENAPI_SYNC_TOKEN }}
+      - name: Update API with Fern
+        uses: fern-api/sync-openapi@v2
+        with:
+          update_from_source: true
+          token: ${{ secrets.OPENAPI_SYNC_TOKEN }}
+          branch: 'update-api'
+          auto_merge: false                        # you MUST use auto_merge: true with branch: main
+          add_timestamp: true
+
+```
+
+
+
 ## Inputs
 
-| Input | Description | Required | Default |
-|-------|-------------|----------|---------|
-| `repository` | Target repository in format `org/repo` | Yes | - |
-| `sources` | Array of mappings with from, to, and (optional) exclude fields | Yes | - |
-| `token` | GitHub token for authentication | No | `${{ github.token }}` |
-| `branch` | Branch to push to in the target repository | Yes | - |
-| `auto_merge` | Will push directly to the specified branch when `true`, will create a PR from the specified base branch onto main if `false`. | No | `false` |
+| Input               | Description                                                                                                                                 | Required | Default                  | Case    |
+|--------------------|---------------------------------------------------------------------------------------------------------------------------------------------|----------|---------------------------|---------|
+| `token`             | GitHub token for authentication                                                                                                            | No       | `${{ github.token }}`     | 1, 2   |
+| `branch`            | Branch to push to in the target repository                                                                                                 | Yes      | -                         | 1, 2   |
+| `auto_merge`        | If `true`, pushes directly to the branch; if `false`, creates a PR from the branch onto `main`                                            | No       | `false`                   | 1, 2   |
+| `add_timestamp`     | If `true`, appends a timestamp to the branch name                                                                                          | No       | `true`                    | 1, 2   |
+| `sources`           | Array of mappings with `from`, `to`, and optional `exclude` fields                                                                         | Yes      | -                         | 1   |
+| `repository`        | Target repository in format `org/repo`                                                                                                     | Yes      | -                         | 1   |
+| `update_from_source`| If `true`, syncs from the source spec files rather than using existing intermediate formats                                               | No       | `false`                   | 2   |
+
 
 **Note: you must set `auto_merge: true` when using `branch: main`**
 
@@ -60,7 +100,7 @@ jobs:
 The GitHub token used for this action must have:
 
 1. **Read access** to the source repository
-2. **Read/Write access** to `Contents` and `Pull requests` for the target repository
+2. **Read/Write access** to `Contents` and `Pull requests` for the repository being updated
 
 ## Adding a Token for GitHub Actions
 
