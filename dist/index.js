@@ -36991,7 +36991,7 @@ const glob = __importStar(__nccwpck_require__(8211));
 const minimatch_1 = __nccwpck_require__(4501);
 async function run() {
     try {
-        const token = process.env.GITHUB_TOKEN || core.getInput('token');
+        const token = core.getInput('token') || process.env.GITHUB_TOKEN;
         let branch = core.getInput('branch', { required: true });
         const autoMerge = core.getBooleanInput('auto_merge') || false;
         const addTimestamp = core.getBooleanInput('add_timestamp') || true;
