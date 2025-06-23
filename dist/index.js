@@ -37313,8 +37313,8 @@ async function createPR(octokit, owner, repo, branchName, targetBranch, isFromFe
     core.info(`Creating new PR from ${branchName} to ${targetBranch}`);
     const date = new Date().toISOString().replace(/[:.]/g, '-');
     let prTitle = isFromFern ?
-        'chore: Update API specifications with fern api update (${date})' :
-        'chore: Update OpenAPI specifications (${date})';
+        `chore: Update API specifications with fern api update (${date})` :
+        `chore: Update OpenAPI specifications (${date})`;
     let prBody = isFromFern ?
         'Update API specifications by running fern api update.' :
         'Update OpenAPI specifications based on changes in the source repository.';

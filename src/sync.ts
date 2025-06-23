@@ -396,8 +396,8 @@ async function createPR(octokit: any, owner: string, repo: string, branchName: s
     
   
   let prTitle = isFromFern ? 
-    'chore: Update API specifications with fern api update (${date})' : 
-    'chore: Update OpenAPI specifications (${date})';
+    `chore: Update API specifications with fern api update (${date})` : 
+    `chore: Update OpenAPI specifications (${date})`;
   
   let prBody = isFromFern ? 
     'Update API specifications by running fern api update.' : 
