@@ -37026,6 +37026,9 @@ async function updateFromSourceSpec(token, branch, autoMerge) {
         await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
         core.info(`Creating and checking out branch: ${branch}`);
         await exec.exec('git', ['checkout', '-b', branch]);
+        const octokit = github.getOctokit(token);
+        const doesBranchExist = await branchExists(owner, repo, branch, octokit);
+        await setupBranch(branch, doesBranchExist);
         await runFernApiUpdate();
         const diff = await exec.getExecOutput('git', ['status', '--porcelain'], { silent: true });
         if (!diff.stdout.trim()) {

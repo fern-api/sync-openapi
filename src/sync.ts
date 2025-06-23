@@ -63,6 +63,10 @@ async function updateFromSourceSpec(token: string, branch: string, autoMerge: bo
     
     core.info(`Creating and checking out branch: ${branch}`);
     await exec.exec('git', ['checkout', '-b', branch]);
+
+    const octokit = github.getOctokit(token);
+    const doesBranchExist = await branchExists(owner, repo, branch, octokit);
+    await setupBranch(branch, doesBranchExist);
     
     await runFernApiUpdate();
     
