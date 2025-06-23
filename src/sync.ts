@@ -31,10 +31,6 @@ export async function run(): Promise<void> {
     const addTimestamp = core.getBooleanInput('add_timestamp') || true;
     const updateFromSource = core.getBooleanInput('update_from_source') || false;
 
-    if (addTimestamp) {
-      branch = `${branch}-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-    }
-    
     if (!token) {
       throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');
     }
@@ -66,7 +62,10 @@ async function updateFromSourceSpec(token: string, branch: string, autoMerge: bo
     await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
     
     core.info(`Creating and checking out branch: ${branch}`);
-    await exec.exec('git', ['checkout', '-b', branch]);
+
+    const octokit = github.getOctokit(token);
+    const doesBranchExist = await branchExists(owner, repo, branch, octokit);
+    await setupBranch(branch, doesBranchExist);
     
     await runFernApiUpdate();
     
@@ -82,7 +81,7 @@ async function updateFromSourceSpec(token: string, branch: string, autoMerge: bo
     
     core.info(`Pushing changes to branch: ${branch}`);
 
-    await exec.exec('git', ['push', '--verbose', 'origin', branch], { silent: false });
+    await exec.exec('git', ['push', '--force', '--verbose', 'origin', branch], { silent: false });
     
     if (!autoMerge) {
       const octokit = github.getOctokit(token);
@@ -259,6 +258,7 @@ async function branchExists(owner: string, repo: string, branchName: string, oct
 async function setupBranch(branchName: string, exists: boolean): Promise<void> {
   try {
     if (exists) {
+      await exec.exec('git', ['fetch', 'origin']);
       core.info(`Branch ${branchName} exists. Checking it out.`);
       await exec.exec('git', ['checkout', branchName]);
       await exec.exec('git', ['pull', 'origin', branchName], { silent: true });
@@ -396,10 +396,12 @@ async function updatePR(octokit: any, owner: string, repo: string, prNumber: num
 // Create a new PR
 async function createPR(octokit: any, owner: string, repo: string, branchName: string, targetBranch: string, isFromFern: boolean): Promise<any> {
   core.info(`Creating new PR from ${branchName} to ${targetBranch}`);
+  const date = new Date().toISOString().replace(/[:.]/g, '-');
+    
   
   let prTitle = isFromFern ? 
-    'Update API specifications with fern api update' : 
-    'Update OpenAPI specifications';
+    `chore: Update API specifications with fern api update (${date})` : 
+    `chore: Update OpenAPI specifications (${date})`;
   
   let prBody = isFromFern ? 
     'Update API specifications by running fern api update.' : 

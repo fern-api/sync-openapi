@@ -36996,9 +36996,6 @@ async function run() {
         const autoMerge = core.getBooleanInput('auto_merge') || false;
         const addTimestamp = core.getBooleanInput('add_timestamp') || true;
         const updateFromSource = core.getBooleanInput('update_from_source') || false;
-        if (addTimestamp) {
-            branch = `${branch}-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-        }
         if (!token) {
             throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');
         }
@@ -37028,7 +37025,9 @@ async function updateFromSourceSpec(token, branch, autoMerge) {
         await exec.exec('git', ['config', 'user.name', 'github-actions']);
         await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
         core.info(`Creating and checking out branch: ${branch}`);
-        await exec.exec('git', ['checkout', '-b', branch]);
+        const octokit = github.getOctokit(token);
+        const doesBranchExist = await branchExists(owner, repo, branch, octokit);
+        await setupBranch(branch, doesBranchExist);
         await runFernApiUpdate();
         const diff = await exec.getExecOutput('git', ['status', '--porcelain'], { silent: true });
         if (!diff.stdout.trim()) {
@@ -37038,7 +37037,7 @@ async function updateFromSourceSpec(token, branch, autoMerge) {
         await exec.exec('git', ['add', '.'], { silent: true });
         await exec.exec('git', ['commit', '-m', 'Update API specifications with fern api update'], { silent: true });
         core.info(`Pushing changes to branch: ${branch}`);
-        await exec.exec('git', ['push', '--verbose', 'origin', branch], { silent: false });
+        await exec.exec('git', ['push', '--force', '--verbose', 'origin', branch], { silent: false });
         if (!autoMerge) {
             const octokit = github.getOctokit(token);
             await createPR(octokit, owner, repo, branch, github.context.ref.replace('refs/heads/', ''), true);
@@ -37197,6 +37196,7 @@ async function branchExists(owner, repo, branchName, octokit) {
 async function setupBranch(branchName, exists) {
     try {
         if (exists) {
+            await exec.exec('git', ['fetch', 'origin']);
             core.info(`Branch ${branchName} exists. Checking it out.`);
             await exec.exec('git', ['checkout', branchName]);
             await exec.exec('git', ['pull', 'origin', branchName], { silent: true });
@@ -37314,9 +37314,10 @@ async function updatePR(octokit, owner, repo, prNumber) {
 // Create a new PR
 async function createPR(octokit, owner, repo, branchName, targetBranch, isFromFern) {
     core.info(`Creating new PR from ${branchName} to ${targetBranch}`);
+    const date = new Date().toISOString().replace(/[:.]/g, '-');
     let prTitle = isFromFern ?
-        'Update API specifications with fern api update' :
-        'Update OpenAPI specifications';
+        `chore: Update API specifications with fern api update (${date})` :
+        `chore: Update OpenAPI specifications (${date})`;
     let prBody = isFromFern ?
         'Update API specifications by running fern api update.' :
         'Update OpenAPI specifications based on changes in the source repository.';
