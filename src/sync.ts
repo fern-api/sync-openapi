@@ -81,7 +81,7 @@ async function updateFromSourceSpec(token: string, branch: string, autoMerge: bo
     
     core.info(`Pushing changes to branch: ${branch}`);
 
-    await exec.exec('git', ['push', '--verbose', 'origin', branch], { silent: false });
+    await exec.exec('git', ['push', '--force, --verbose', 'origin', branch], { silent: false });
     
     if (!autoMerge) {
       const octokit = github.getOctokit(token);
