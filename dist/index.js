@@ -37196,6 +37196,7 @@ async function branchExists(owner, repo, branchName, octokit) {
 async function setupBranch(branchName, exists) {
     try {
         if (exists) {
+            await exec.exec('git', ['fetch', 'origin']);
             core.info(`Branch ${branchName} exists. Checking it out.`);
             await exec.exec('git', ['checkout', branchName]);
             await exec.exec('git', ['pull', 'origin', branchName], { silent: true });

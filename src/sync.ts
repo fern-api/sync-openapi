@@ -258,6 +258,7 @@ async function branchExists(owner: string, repo: string, branchName: string, oct
 async function setupBranch(branchName: string, exists: boolean): Promise<void> {
   try {
     if (exists) {
+      await exec.exec('git', ['fetch', 'origin']);
       core.info(`Branch ${branchName} exists. Checking it out.`);
       await exec.exec('git', ['checkout', branchName]);
       await exec.exec('git', ['pull', 'origin', branchName], { silent: true });
