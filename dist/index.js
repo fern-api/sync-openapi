@@ -36996,9 +36996,6 @@ async function run() {
         const autoMerge = core.getBooleanInput('auto_merge') || false;
         const addTimestamp = core.getBooleanInput('add_timestamp') || true;
         const updateFromSource = core.getBooleanInput('update_from_source') || false;
-        if (addTimestamp) {
-            branch = `${branch}-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-        }
         if (!token) {
             throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');
         }
@@ -37314,9 +37311,10 @@ async function updatePR(octokit, owner, repo, prNumber) {
 // Create a new PR
 async function createPR(octokit, owner, repo, branchName, targetBranch, isFromFern) {
     core.info(`Creating new PR from ${branchName} to ${targetBranch}`);
+    const date = new Date().toISOString().replace(/[:.]/g, '-');
     let prTitle = isFromFern ?
-        'Update API specifications with fern api update' :
-        'Update OpenAPI specifications';
+        'chore: Update API specifications with fern api update (${date})' :
+        'chore: Update OpenAPI specifications (${date})';
     let prBody = isFromFern ?
         'Update API specifications by running fern api update.' :
         'Update OpenAPI specifications based on changes in the source repository.';
