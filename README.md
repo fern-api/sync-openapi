@@ -1,10 +1,46 @@
 # sync-openapi
 
-A GitHub Action to sync files/folders from your source repository to a target repository (like fern-config).
+A GitHub Action to sync OpenAPI specifications with your Fern setup. Choose your scenario:
+
+- **Case 1: Sync from public URL (most common).** Your OpenAPI spec is hosted at a publicly available URL and you want to pull it into your fern folder
+- **Case 2: Sync between repositories**: Your OpenAPI spec lives in one repository and you want to sync it to another repository where your fern folder lives (like fern-config)
 
 ## Usage
 
-### Case 1: Sync files/folders between repositories
+### Case 1: Sync specs using `fern api update` (recommended)
+
+1. In your your source repo, create a file named `sync-openapi.yml` in `.github/workflows/`. 
+2. Include the following contents in `sync-openapi.yml`: 
+
+```yaml
+name: Sync OpenAPI Specs # can be customized
+on:                                              # additional custom triggers can be configured, examples below
+  workflow_dispatch:                             # manual dispatch
+  push:                                          
+    branches:
+      - main                                     # on push to main
+  schedule:
+    - cron: '0 3 * * *'                          # everyday at 3:00 AM UTC
+
+jobs:
+  update-from-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.OPENAPI_SYNC_TOKEN }}
+      - name: Update API with Fern
+        uses: fern-api/sync-openapi@v2
+        with:
+          update_from_source: true
+          token: ${{ secrets.OPENAPI_SYNC_TOKEN }}
+          branch: 'update-api'
+          auto_merge: false                        # you MUST use auto_merge: true with branch: main
+          add_timestamp: true
+
+```
+
+### Case 2: Sync files/folders between repositories
 
 1. In your your source repo, create a file named `sync-openapi.yml` in `.github/workflows/`. 
 2. Include the following contents in `sync-openapi.yml`: 
@@ -44,42 +80,6 @@ jobs:
           auto_merge: true                        # you MUST use auto_merge: true with branch: main
 
 ```
-
-### Case 2: Sync specs using `fern api update`
-
-1. In your your source repo, create a file named `sync-openapi.yml` in `.github/workflows/`. 
-2. Include the following contents in `sync-openapi.yml`: 
-
-```yaml
-name: Sync OpenAPI Specs # can be customized
-on:                                              # additional custom triggers can be configured, examples below
-  workflow_dispatch:                             # manual dispatch
-  push:                                          
-    branches:
-      - main                                     # on push to main
-  schedule:
-    - cron: '0 3 * * *'                          # everyday at 3:00 AM UTC
-
-jobs:
-  update-from-source:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.OPENAPI_SYNC_TOKEN }}
-      - name: Update API with Fern
-        uses: fern-api/sync-openapi@v2
-        with:
-          update_from_source: true
-          token: ${{ secrets.OPENAPI_SYNC_TOKEN }}
-          branch: 'update-api'
-          auto_merge: false                        # you MUST use auto_merge: true with branch: main
-          add_timestamp: true
-
-```
-
-
-
 ## Inputs
 
 | Input               | Description                                                                                                                                 | Required | Default                  | Case    |
