@@ -17,10 +17,6 @@ inputs:
     description: 'Whether to push directly to the branch or create a PR'
     required: false
     default: 'false'
-  add_timestamp:
-    description: 'Whether to add a timestamp to the branch name'
-    required: false
-    default: 'true'
   update_from_source:
     description: 'Whether to run "fern api update" on the current repository instead of syncing files'
     required: false

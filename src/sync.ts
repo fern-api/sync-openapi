@@ -26,10 +26,9 @@ interface SyncOptions {
 export async function run(): Promise<void> {
   try {
     const token = core.getInput('token') || process.env.GITHUB_TOKEN;
-    let branch = core.getInput('branch', { required: true });
-    const autoMerge = core.getBooleanInput('auto_merge') || false;
-    const addTimestamp = core.getBooleanInput('add_timestamp') || true;
-    const updateFromSource = core.getBooleanInput('update_from_source') || false;
+    const branch = core.getInput('branch', { required: true });
+    const autoMerge = core.getBooleanInput('auto_merge');
+    const updateFromSource = core.getBooleanInput('update_from_source');
 
     if (!token) {
       throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');
