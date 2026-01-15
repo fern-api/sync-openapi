@@ -36,7 +36,6 @@ jobs:
           token: ${{ secrets.OPENAPI_SYNC_TOKEN }}
           branch: 'update-api'
           auto_merge: false                        # you MUST use auto_merge: true with branch: main
-          add_timestamp: true
 
 ```
 
@@ -87,7 +86,6 @@ jobs:
 | `token`             | GitHub token for authentication                                                                                                            | No       | `${{ github.token }}`     | 1, 2   |
 | `branch`            | Branch to push to in the target repository                                                                                                 | Yes      | -                         | 1, 2   |
 | `auto_merge`        | If `true`, pushes directly to the branch; if `false`, creates a PR from the branch onto `main`                                            | No       | `false`                   | 1, 2   |
-| `add_timestamp`     | If `true`, appends a timestamp to the branch name                                                                                          | No       | `true`                    | 1, 2   |
 | `sources`           | Array of mappings with `from`, `to`, and optional `exclude` fields                                                                         | Yes      | -                         | 2   |
 | `repository`        | Target repository in format `org/repo`                                                                                                     | Yes      | -                         | 2   |
 | `update_from_source`| If `true`, syncs from the source spec files rather than using existing intermediate formats                                               | No       | `false`                   | 1   |

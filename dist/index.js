@@ -36991,13 +36991,12 @@ const glob = __importStar(__nccwpck_require__(8211));
 const minimatch_1 = __nccwpck_require__(4501);
 async function run() {
     try {
-        const token = core.getInput('token') || process.env.GITHUB_TOKEN;
-        let branch = core.getInput('branch', { required: true });
-        const autoMerge = core.getBooleanInput('auto_merge') || false;
-        const addTimestamp = core.getBooleanInput('add_timestamp') || true;
-        const updateFromSource = core.getBooleanInput('update_from_source') || false;
+        const token = core.getInput("token") || process.env.GITHUB_TOKEN;
+        const branch = core.getInput("branch", { required: true });
+        const autoMerge = core.getBooleanInput("auto_merge");
+        const updateFromSource = core.getBooleanInput("update_from_source");
         if (!token) {
-            throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');
+            throw new Error("GitHub token is required. Please provide a token with appropriate permissions.");
         }
         if (updateFromSource) {
             await updateFromSourceSpec(token, branch, autoMerge);
@@ -37011,48 +37010,48 @@ async function run() {
             core.setFailed(error.message);
         }
         else {
-            core.setFailed('An unknown error occurred');
+            core.setFailed("An unknown error occurred");
         }
     }
 }
 async function updateFromSourceSpec(token, branch, autoMerge) {
-    if (!token) {
-        throw new Error('GitHub token is required. Please provide a token with appropriate permissions.');
-    }
     const owner = github.context.repo.owner;
     const repo = github.context.repo.repo;
     try {
-        await exec.exec('git', ['config', 'user.name', 'github-actions']);
-        await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
+        await exec.exec("git", ["config", "user.name", "github-actions"]);
+        await exec.exec("git", [
+            "config",
+            "user.email",
+            "github-actions@github.com",
+        ]);
         core.info(`Creating and checking out branch: ${branch}`);
         const octokit = github.getOctokit(token);
         const doesBranchExist = await branchExists(owner, repo, branch, octokit);
         await setupBranch(branch, doesBranchExist);
         await runFernApiUpdate();
-        const diff = await exec.getExecOutput('git', ['status', '--porcelain'], { silent: true });
+        const diff = await exec.getExecOutput("git", ["status", "--porcelain"], { silent: true });
         if (!diff.stdout.trim()) {
-            core.info('No changes detected from fern api update. Skipping further actions.');
+            core.info("No changes detected from fern api update. Skipping further actions.");
             return;
         }
-        await exec.exec('git', ['add', '.'], { silent: true });
-        await exec.exec('git', ['commit', '-m', 'Update API specifications with fern api update'], { silent: true });
+        await exec.exec("git", ["add", "."], { silent: true });
+        await exec.exec("git", ["commit", "-m", "Update API specifications with fern api update"], { silent: true });
         core.info(`Pushing changes to branch: ${branch}`);
-        await exec.exec('git', ['push', '--force', '--verbose', 'origin', branch], { silent: false });
+        await exec.exec("git", ["push", "--force", "--verbose", "origin", branch], { silent: false });
         if (!autoMerge) {
-            const octokit = github.getOctokit(token);
-            await createPR(octokit, owner, repo, branch, github.context.ref.replace('refs/heads/', ''), true);
+            await createPR(octokit, owner, repo, branch, github.context.ref.replace("refs/heads/", ""), true);
         }
         else {
             core.info(`Changes pushed directly to branch '${branch}' because auto-merge is enabled.`);
         }
     }
     catch (error) {
-        throw new Error(`Failed to update from source: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(`Failed to update from source: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
 }
 async function updateTargetSpec(token, branch, autoMerge) {
-    const repository = core.getInput('repository', { required: true });
-    const fileMappingInput = core.getInput('sources', { required: true });
+    const repository = core.getInput("repository", { required: true });
+    const fileMappingInput = core.getInput("sources", { required: true });
     let fileMapping;
     try {
         fileMapping = yaml.load(fileMappingInput);
@@ -37066,7 +37065,7 @@ async function updateTargetSpec(token, branch, autoMerge) {
         }
     }
     if (!Array.isArray(fileMapping) || fileMapping.length === 0) {
-        throw new Error('File mapping must be a non-empty array');
+        throw new Error("File mapping must be a non-empty array");
     }
     for (const [index, mapping] of fileMapping.entries()) {
         if (!mapping.from || !mapping.to) {
@@ -37078,7 +37077,7 @@ async function updateTargetSpec(token, branch, autoMerge) {
         mappings: fileMapping,
         token,
         branch,
-        autoMerge
+        autoMerge,
     };
     await cloneRepository(options);
     await syncChanges(options);
@@ -37087,62 +37086,62 @@ async function runFernApiUpdate() {
     try {
         core.info('Running "fern api update" command');
         try {
-            await exec.exec('fern', ['--version'], { silent: true });
-            core.info('Fern CLI is already installed');
+            await exec.exec("fern", ["--version"], { silent: true });
+            core.info("Fern CLI is already installed");
         }
         catch (error) {
-            core.info('Fern CLI not found. Installing Fern CLI...');
-            await exec.exec('npm', ['install', '-g', 'fern-api']);
+            core.info("Fern CLI not found. Installing Fern CLI...");
+            await exec.exec("npm", ["install", "-g", "fern-api"]);
         }
-        await exec.exec('fern', ['api', 'update']);
-        core.info('Fern API update completed');
+        await exec.exec("fern", ["api", "update"]);
+        core.info("Fern API update completed");
     }
     catch (error) {
-        throw new Error(`Failed to run "fern api update": ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(`Failed to run "fern api update": ${error instanceof Error ? error.message : "Unknown error"}`);
     }
 }
 async function cloneRepository(options) {
     if (!options.token) {
-        throw new Error('GitHub token is required to authenticate and clone the repository. Please provide a token with appropriate permissions.');
+        throw new Error("GitHub token is required to authenticate and clone the repository. Please provide a token with appropriate permissions.");
     }
     try {
         const octokit = github.getOctokit(options.token);
-        const [owner, repo] = options.repository.split('/');
+        const [owner, repo] = options.repository.split("/");
         await octokit.rest.repos.get({
             owner,
-            repo
+            repo,
         });
-        core.info('Successfully authenticated with the target repository');
+        core.info("Successfully authenticated with the target repository");
     }
     catch (error) {
         if (error instanceof Error) {
             throw new Error(`Failed to verify repository access: ${error.message}`);
         }
         else {
-            throw new Error('An unknown error occurred while verifying repository access');
+            throw new Error("An unknown error occurred while verifying repository access");
         }
     }
     const repoUrl = `https://x-access-token:${options.token}@github.com/${options.repository}.git`;
-    const repoDir = 'temp-fern-config';
+    const repoDir = "temp-fern-config";
     core.info(`Cloning repository ${options.repository} to ${repoDir}`);
     await io.mkdirP(repoDir);
     try {
-        await exec.exec('git', ['clone', repoUrl, repoDir]);
+        await exec.exec("git", ["clone", repoUrl, repoDir]);
     }
     catch (error) {
         throw new Error(`Failed to clone repository. Please ensure your token has 'repo' scope and you have write access to ${options.repository}.`);
     }
     process.chdir(repoDir);
-    await exec.exec('git', ['config', 'user.name', 'github-actions']);
-    await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
+    await exec.exec("git", ["config", "user.name", "github-actions"]);
+    await exec.exec("git", [
+        "config",
+        "user.email",
+        "github-actions@github.com",
+    ]);
 }
 async function syncChanges(options) {
-    if (!options.token) {
-        core.warning('GitHub token not provided. Skipping changes.');
-        return;
-    }
     const octokit = github.getOctokit(options.token);
-    const [owner, repo] = options.repository.split('/');
+    const [owner, repo] = options.repository.split("/");
     try {
         const workingBranch = options.branch;
         if (options.autoMerge) {
@@ -37154,9 +37153,9 @@ async function syncChanges(options) {
         const doesBranchExist = await branchExists(owner, repo, workingBranch, octokit);
         await setupBranch(workingBranch, doesBranchExist);
         await processSourceMappings(options);
-        const diff = await exec.getExecOutput('git', ['status', '--porcelain'], { silent: true });
+        const diff = await exec.getExecOutput("git", ["status", "--porcelain"], { silent: true });
         if (!diff.stdout.trim()) {
-            core.info('No changes detected. Skipping further actions.');
+            core.info("No changes detected. Skipping further actions.");
             return;
         }
         await commitChanges();
@@ -37169,7 +37168,7 @@ async function syncChanges(options) {
                 await updatePR(octokit, owner, repo, existingPRNumber);
             }
             else {
-                await createPR(octokit, owner, repo, workingBranch, 'main', false);
+                await createPR(octokit, owner, repo, workingBranch, "main", false);
             }
         }
         else {
@@ -37177,7 +37176,7 @@ async function syncChanges(options) {
         }
     }
     catch (error) {
-        throw new Error(`Failed to sync changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(`Failed to sync changes: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
 }
 async function branchExists(owner, repo, branchName, octokit) {
@@ -37185,7 +37184,7 @@ async function branchExists(owner, repo, branchName, octokit) {
         await octokit.rest.git.getRef({
             owner,
             repo,
-            ref: `heads/${branchName}`
+            ref: `heads/${branchName}`,
         });
         return true;
     }
@@ -37196,24 +37195,26 @@ async function branchExists(owner, repo, branchName, octokit) {
 async function setupBranch(branchName, exists) {
     try {
         if (exists) {
-            await exec.exec('git', ['fetch', 'origin']);
+            await exec.exec("git", ["fetch", "origin"]);
             core.info(`Branch ${branchName} exists. Checking it out.`);
-            await exec.exec('git', ['checkout', branchName]);
-            await exec.exec('git', ['pull', 'origin', branchName], { silent: true });
+            await exec.exec("git", ["checkout", branchName]);
+            await exec.exec("git", ["pull", "origin", branchName], {
+                silent: true,
+            });
         }
         else {
             core.info(`Branch ${branchName} does not exist. Creating it.`);
-            await exec.exec('git', ['checkout', '-b', branchName]);
+            await exec.exec("git", ["checkout", "-b", branchName]);
         }
     }
     catch (error) {
-        throw new Error(`Failed to setup branch ${branchName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(`Failed to setup branch ${branchName}: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
 }
 async function processSourceMappings(options) {
-    core.info('Processing source mappings');
-    const sourceRepoRoot = path.resolve(process.env.GITHUB_WORKSPACE || '');
-    const destRepoRoot = path.resolve('.');
+    core.info("Processing source mappings");
+    const sourceRepoRoot = path.resolve(process.env.GITHUB_WORKSPACE || "");
+    const destRepoRoot = path.resolve(".");
     for (const mapping of options.mappings) {
         const sourcePath = path.join(sourceRepoRoot, mapping.from);
         const destPath = path.join(destRepoRoot, mapping.to);
@@ -37233,10 +37234,10 @@ async function processSourceMappings(options) {
 }
 async function syncDirectory(sourceDirPath, destDirPath, excludePatterns) {
     await io.mkdirP(destDirPath);
-    const files = glob.sync('**/*', {
+    const files = glob.sync("**/*", {
         cwd: sourceDirPath,
         nodir: true,
-        absolute: false
+        absolute: false,
     });
     for (const file of files) {
         const sourceFilePath = path.join(sourceDirPath, file);
@@ -37253,18 +37254,20 @@ async function syncFile(sourceFilePath, destFilePath) {
     fs.copyFileSync(sourceFilePath, destFilePath);
 }
 function isExcluded(filePath, excludePatterns) {
-    const sourceRepoRoot = path.resolve(process.env.GITHUB_WORKSPACE || '');
+    const sourceRepoRoot = path.resolve(process.env.GITHUB_WORKSPACE || "");
     const relativePath = path.relative(sourceRepoRoot, filePath);
-    return excludePatterns.some(pattern => (0, minimatch_1.minimatch)(relativePath, pattern));
+    return excludePatterns.some((pattern) => (0, minimatch_1.minimatch)(relativePath, pattern));
 }
 async function commitChanges() {
-    await exec.exec('git', ['add', '.'], { silent: true });
-    await exec.exec('git', ['commit', '-m', `Sync OpenAPI files from ${github.context.repo.repo}`], { silent: true });
+    await exec.exec("git", ["add", "."], { silent: true });
+    await exec.exec("git", ["commit", "-m", `Sync OpenAPI files from ${github.context.repo.repo}`], { silent: true });
 }
 async function hasDifferenceWithRemote(branchName) {
     try {
-        await exec.exec('git', ['fetch', 'origin', branchName], { silent: true });
-        const diff = await exec.getExecOutput('git', ['diff', `HEAD`, `origin/${branchName}`], { silent: true });
+        await exec.exec("git", ["fetch", "origin", branchName], {
+            silent: true,
+        });
+        const diff = await exec.getExecOutput("git", ["diff", `HEAD`, `origin/${branchName}`], { silent: true });
         return !!diff.stdout.trim();
     }
     catch (error) {
@@ -37279,7 +37282,9 @@ async function pushChanges(branchName, options) {
             shouldPush = await hasDifferenceWithRemote(branchName);
         }
         if (shouldPush) {
-            await exec.exec('git', ['push', '--force', 'origin', branchName], { silent: true });
+            await exec.exec("git", ["push", "--force", "origin", branchName], {
+                silent: true,
+            });
             return true;
         }
         else {
@@ -37288,7 +37293,7 @@ async function pushChanges(branchName, options) {
         }
     }
     catch (error) {
-        throw new Error(`Failed to push changes to the repository: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(`Failed to push changes to the repository: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
 }
 // Check if a PR exists for a branch
@@ -37297,7 +37302,7 @@ async function prExists(owner, repo, branchName, octokit) {
         owner,
         repo,
         head: `${owner}:${branchName}`,
-        state: 'open'
+        state: "open",
     });
     return prs.data.length > 0 ? prs.data[0].number : null;
 }
@@ -37308,26 +37313,26 @@ async function updatePR(octokit, owner, repo, prNumber) {
         owner,
         repo,
         pull_number: prNumber,
-        body: `Update OpenAPI specifications based on changes in the source repository.\nUpdated: ${new Date().toISOString()}`
+        body: `Update OpenAPI specifications based on changes in the source repository.\nUpdated: ${new Date().toISOString()}`,
     });
 }
 // Create a new PR
 async function createPR(octokit, owner, repo, branchName, targetBranch, isFromFern) {
     core.info(`Creating new PR from ${branchName} to ${targetBranch}`);
-    const date = new Date().toISOString().replace(/[:.]/g, '-');
-    let prTitle = isFromFern ?
-        `chore: Update API specifications with fern api update (${date})` :
-        `chore: Update OpenAPI specifications (${date})`;
-    let prBody = isFromFern ?
-        'Update API specifications by running fern api update.' :
-        'Update OpenAPI specifications based on changes in the source repository.';
+    const date = new Date().toISOString().replace(/[:.]/g, "-");
+    let prTitle = isFromFern
+        ? `chore: Update API specifications with fern api update (${date})`
+        : `chore: Update OpenAPI specifications (${date})`;
+    let prBody = isFromFern
+        ? "Update API specifications by running fern api update."
+        : "Update OpenAPI specifications based on changes in the source repository.";
     const prResponse = await octokit.rest.pulls.create({
         owner,
         repo,
         title: prTitle,
         head: branchName,
         base: targetBranch,
-        body: prBody
+        body: prBody,
     });
     core.info(`Pull request created: ${prResponse.data.html_url}`);
     return prResponse;
