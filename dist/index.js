@@ -36993,9 +36993,9 @@ async function run() {
     try {
         const token = core.getInput('token') || process.env.GITHUB_TOKEN;
         let branch = core.getInput('branch', { required: true });
-        const autoMerge = core.getBooleanInput('auto_merge') || false;
-        const addTimestamp = core.getBooleanInput('add_timestamp') || true;
-        const updateFromSource = core.getBooleanInput('update_from_source') || false;
+        const autoMerge = core.getBooleanInput('auto_merge');
+        const addTimestamp = core.getBooleanInput('add_timestamp');
+        const updateFromSource = core.getBooleanInput('update_from_source');
         if (addTimestamp) {
             branch = `${branch}-${new Date().toISOString().replace(/[:.]/g, '-')}`;
         }
