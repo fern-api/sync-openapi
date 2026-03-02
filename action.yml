@@ -9,7 +9,8 @@ inputs:
     required: true
   branch:
     description: 'Branch name to create or update'
-    required: true
+    required: false
+    default: 'fern/sync-openapi'
   sources:
     description: 'JSON or YAML array of mappings (from source to destination) (only used when update_from_source is false)'
     required: false
@@ -22,7 +23,7 @@ inputs:
     required: false
     default: 'false'
 runs:
-  using: 'node16'
+  using: 'node20'
   main: 'dist/index.js'
 branding:
   icon: 'refresh-cw'

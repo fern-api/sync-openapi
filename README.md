@@ -9,7 +9,7 @@ A GitHub Action to [sync OpenAPI specifications with your Fern setup](/learn/api
 
 ### Case 1: Sync specs from public URL (recommended)
 
-1. In your source repo, create a file named `sync-openapi.yml` in `.github/workflows/`. 
+1. In your repo, create a file named `sync-openapi.yml` in `.github/workflows/`. 
 2. Include the following contents in `sync-openapi.yml`: 
 
 ```yaml
@@ -30,14 +30,17 @@ jobs:
         with:
           token: ${{ secrets.OPENAPI_SYNC_TOKEN }}
       - name: Update API with Fern
-        uses: fern-api/sync-openapi@v2
+        uses: fern-api/sync-openapi@v4
         with:
           update_from_source: true
           token: ${{ secrets.OPENAPI_SYNC_TOKEN }}
-          branch: 'update-api'
           auto_merge: false                        # you MUST use auto_merge: true with branch: main
 
 ```
+
+> **PR deduplication**: When `auto_merge` is `false`, the action creates a single PR on the `branch` (default: `fern/sync-openapi`) and accumulates commits on subsequent runs. If the source spec hasn't changed, the action is a no-op. This prevents duplicate PRs from piling up.
+>
+> **Branch divergence handling**: If the PR branch has diverged (e.g., someone manually rebased or edited it), the action will attempt to rebase automatically. If rebase fails due to merge conflicts, a comment is left on the PR with detailed error output and resolution steps.
 
 ### Case 2: Sync files/folders between repositories
 
@@ -60,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Sync OpenAPI spec to target repo
-        uses: fern-api/sync-openapi@v2
+        uses: fern-api/sync-openapi@v4
         with:
           repository: <your-org>/<your-target-repo>
           token: ${{ secrets.<PAT_TOKEN_NAME> }}
@@ -83,12 +86,12 @@ jobs:
 
 | Input               | Description                                                                                                                                 | Required | Default                  | Case    |
 |--------------------|---------------------------------------------------------------------------------------------------------------------------------------------|----------|---------------------------|---------|
-| `token`             | GitHub token for authentication                                                                                                            | No       | `${{ github.token }}`     | 1, 2   |
-| `branch`            | Branch to push to in the target repository                                                                                                 | Yes      | -                         | 1, 2   |
+| `token`             | GitHub token for authentication                                                                                                            | Yes      | -                         | 1, 2   |
+| `branch`            | Branch name to create or update. **Must be a stable name** (e.g., `fern/sync-openapi`) — do not use dynamic/timestamped names, or PR deduplication will not work. | No       | `fern/sync-openapi`       | 1, 2   |
 | `auto_merge`        | If `true`, pushes directly to the branch; if `false`, creates a PR from the branch onto `main`                                            | No       | `false`                   | 1, 2   |
 | `sources`           | Array of mappings with `from`, `to`, and optional `exclude` fields                                                                         | Yes      | -                         | 2   |
 | `repository`        | Target repository in format `org/repo`                                                                                                     | Yes      | -                         | 2   |
-| `update_from_source`| If `true`, syncs from the source spec files rather than using existing intermediate formats                                               | No       | `false`                   | 1   |
+| `update_from_source`| If `true`, runs `fern api update` on the current repository instead of syncing files between repos                                        | No       | `false`                   | 1   |
 
 
 **Note: you must set `auto_merge: true` when using `branch: main`**
@@ -106,4 +109,17 @@ The GitHub token used for this action must have:
 2. Go to `Settings -> Secrets and variables -> Actions` and click on `New repository secret`
 3. Name your token (i.e. `OPENAPI_SYNC_TOKEN`) and paste in the PAT token generated above
 4. Replace `<PAT_TOKEN_NAME>` in the example YAML configuration with your token name.
+
+## Releasing
+
+This project uses GitHub Releases to publish new versions. When a release is published, a workflow automatically updates the major and minor version tags so consumers stay up to date.
+
+For example, publishing release `v4.1.0` will:
+- Force-update the `v4` tag (so `@v4` users get the update)
+- Force-update the `v4.1` tag (so `@v4.1` users get the update)
+
+To release:
+1. Go to [Releases → Draft a new release](../../releases/new)
+2. Create a new tag (e.g., `v4.0.1`) following [semver](https://semver.org/)
+3. Click **Publish release**
 

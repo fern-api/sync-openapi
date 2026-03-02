@@ -1,11 +1,11 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import * as core from "@actions/core";
-import * as github from "@actions/github";
 import * as exec from "@actions/exec";
+import * as github from "@actions/github";
 import * as io from "@actions/io";
-import * as fs from "fs";
-import * as path from "path";
-import * as yaml from "js-yaml";
 import * as glob from "glob";
+import * as yaml from "js-yaml";
 import { minimatch } from "minimatch";
 
 interface SourceMapping {
@@ -26,7 +26,7 @@ interface SyncOptions {
 export async function run(): Promise<void> {
     try {
         const token = core.getInput("token") || process.env.GITHUB_TOKEN;
-        const branch = core.getInput("branch", { required: true });
+        const branch = core.getInput("branch") || "fern/sync-openapi";
         const autoMerge = core.getBooleanInput("auto_merge");
         const updateFromSource = core.getBooleanInput("update_from_source");
 
@@ -101,21 +101,39 @@ async function updateFromSourceSpec(
 
         core.info(`Pushing changes to branch: ${branch}`);
 
-        await exec.exec(
-            "git",
-            ["push", "--force", "--verbose", "origin", branch],
-            { silent: false },
+        const pushSucceeded = await pushWithFallback(
+            branch,
+            owner,
+            repo,
+            octokit,
         );
 
+        if (!pushSucceeded) {
+            return;
+        }
+
         if (!autoMerge) {
-            await createPR(
-                octokit,
+            const existingPRNumber = await prExists(
                 owner,
                 repo,
                 branch,
-                github.context.ref.replace("refs/heads/", ""),
-                true,
+                octokit,
             );
+
+            if (existingPRNumber) {
+                core.info(
+                    `PR #${existingPRNumber} already exists for branch '${branch}'. New commit has been pushed to the existing PR.`,
+                );
+            } else {
+                await createPR(
+                    octokit,
+                    owner,
+                    repo,
+                    branch,
+                    github.context.ref.replace("refs/heads/", ""),
+                    true,
+                );
+            }
         } else {
             core.info(
                 `Changes pushed directly to branch '${branch}' because auto-merge is enabled.`,
@@ -143,6 +161,9 @@ async function updateTargetSpec(
         try {
             fileMapping = JSON.parse(fileMappingInput) as SourceMapping[];
         } catch (jsonError) {
+            core.debug(
+                `JSON parse also failed: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`,
+            );
             throw new Error(
                 `Failed to parse 'sources' input as either YAML or JSON. Please check the format. Error: ${(yamlError as Error).message}`,
             );
@@ -181,6 +202,9 @@ async function runFernApiUpdate(): Promise<void> {
             await exec.exec("fern", ["--version"], { silent: true });
             core.info("Fern CLI is already installed");
         } catch (error) {
+            core.debug(
+                `Fern CLI check failed: ${error instanceof Error ? error.message : String(error)}`,
+            );
             core.info("Fern CLI not found. Installing Fern CLI...");
             await exec.exec("npm", ["install", "-g", "fern-api"]);
         }
@@ -233,6 +257,9 @@ async function cloneRepository(options: SyncOptions): Promise<void> {
     try {
         await exec.exec("git", ["clone", repoUrl, repoDir]);
     } catch (error) {
+        core.debug(
+            `Clone error: ${error instanceof Error ? error.message : String(error)}`,
+        );
         throw new Error(
             `Failed to clone repository. Please ensure your token has 'repo' scope and you have write access to ${options.repository}.`,
         );
@@ -248,11 +275,18 @@ async function cloneRepository(options: SyncOptions): Promise<void> {
 }
 
 async function syncChanges(options: SyncOptions): Promise<void> {
-    const octokit = github.getOctokit(options.token!);
+    if (!options.token) {
+        throw new Error("GitHub token is required for syncing changes.");
+    }
+    if (!options.branch) {
+        throw new Error("Branch name is required for syncing changes.");
+    }
+
+    const octokit = github.getOctokit(options.token);
     const [owner, repo] = options.repository.split("/");
 
     try {
-        const workingBranch = options.branch!;
+        const workingBranch = options.branch;
 
         if (options.autoMerge) {
             core.info(
@@ -335,7 +369,7 @@ async function branchExists(
             ref: `heads/${branchName}`,
         });
         return true;
-    } catch (error) {
+    } catch (_error) {
         return false;
     }
 }
@@ -448,7 +482,7 @@ async function hasDifferenceWithRemote(branchName: string): Promise<boolean> {
         );
 
         return !!diff.stdout.trim();
-    } catch (error) {
+    } catch (_error) {
         core.info(
             `Could not fetch remote branch, assuming this is the first push to new branch.`,
         );
@@ -481,6 +515,133 @@ async function pushChanges(
             `Failed to push changes to the repository: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
     }
+}
+
+// Push with fallback: try regular push, then rebase + push, then comment on PR with error details
+async function pushWithFallback(
+    branchName: string,
+    owner: string,
+    repo: string,
+    octokit: any,
+): Promise<boolean> {
+    // Try regular push first
+    try {
+        await exec.exec("git", ["push", "--verbose", "origin", branchName], {
+            silent: false,
+        });
+        return true;
+    } catch {
+        core.info(
+            `Regular push to '${branchName}' failed. Attempting to rebase on remote branch.`,
+        );
+    }
+
+    // Try pull --rebase then push
+    let errorMsg: string | null = null;
+    let errorLabel: string = "Rebase error";
+    let abortErrorMsg: string | null = null;
+    let rebaseFailed = false;
+
+    const rebaseResult = await exec.getExecOutput(
+        "git",
+        ["pull", "--rebase", "origin", branchName],
+        { ignoreReturnCode: true },
+    );
+
+    if (rebaseResult.exitCode === 0) {
+        const pushResult = await exec.getExecOutput(
+            "git",
+            ["push", "--verbose", "origin", branchName],
+            { ignoreReturnCode: true },
+        );
+
+        if (pushResult.exitCode === 0) {
+            core.info(
+                `Successfully pushed to '${branchName}' after rebasing on remote changes.`,
+            );
+            return true;
+        }
+
+        // Push after rebase failed — no rebase in progress, don't abort
+        errorLabel = "Push error";
+        errorMsg =
+            [pushResult.stderr.trim(), pushResult.stdout.trim()]
+                .filter(Boolean)
+                .join("\n") ||
+            `git push failed with exit code ${pushResult.exitCode}`;
+        core.info(`Push after rebase failed: ${errorMsg}`);
+    } else {
+        // Rebase itself failed (merge conflicts)
+        rebaseFailed = true;
+        errorLabel = "Rebase error";
+        errorMsg =
+            [rebaseResult.stderr.trim(), rebaseResult.stdout.trim()]
+                .filter(Boolean)
+                .join("\n") ||
+            `git pull --rebase failed with exit code ${rebaseResult.exitCode}`;
+
+        core.info(
+            `Rebase failed (likely due to merge conflicts). Aborting rebase.`,
+        );
+
+        // Abort the rebase so the working tree is clean
+        const abortResult = await exec.getExecOutput(
+            "git",
+            ["rebase", "--abort"],
+            { ignoreReturnCode: true },
+        );
+        if (abortResult.exitCode !== 0) {
+            abortErrorMsg =
+                [abortResult.stderr.trim(), abortResult.stdout.trim()]
+                    .filter(Boolean)
+                    .join("\n") ||
+                `rebase --abort failed with exit code ${abortResult.exitCode}`;
+            core.info(
+                `rebase --abort failed: ${abortErrorMsg}. The working tree may be in an unexpected state.`,
+            );
+        }
+    }
+
+    // Last resort: leave a comment on the existing PR
+    const existingPRNumber = await prExists(owner, repo, branchName, octokit);
+    if (existingPRNumber) {
+        core.info(
+            `Could not push to '${branchName}'. Leaving a comment on PR #${existingPRNumber}.`,
+        );
+
+        const failureReason = rebaseFailed
+            ? "merge conflicts"
+            : "a push rejection after successful rebase";
+
+        let commentBody =
+            `⚠️ **Sync failed**: The latest \`fern api update\` detected changes, but they could not be pushed to this branch due to ${failureReason}.\n\n` +
+            `**To resolve**, either:\n` +
+            `- Merge or close this PR so the next run creates a fresh one, or\n` +
+            `- Manually rebase this branch on \`${github.context.ref.replace("refs/heads/", "")}\` and re-run the workflow.`;
+
+        if (errorMsg) {
+            commentBody += `\n\n**${errorLabel}:**\n\`\`\`\n${errorMsg}\n\`\`\``;
+        }
+        if (abortErrorMsg) {
+            commentBody += `\n\n**Rebase abort error:**\n\`\`\`\n${abortErrorMsg}\n\`\`\`\n— the working tree may be in an unexpected state.`;
+        }
+
+        await octokit.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number: existingPRNumber,
+            body: commentBody,
+        });
+        core.setFailed(
+            `Failed to push changes to '${branchName}' due to ${failureReason}. A comment has been left on PR #${existingPRNumber}.`,
+        );
+    } else {
+        core.setFailed(
+            `Failed to push changes to '${branchName}' and no existing PR was found to comment on.`,
+        );
+    }
+
+    return false;
 }
 
 // Check if a PR exists for a branch
@@ -529,11 +690,11 @@ async function createPR(
     core.info(`Creating new PR from ${branchName} to ${targetBranch}`);
     const date = new Date().toISOString().replace(/[:.]/g, "-");
 
-    let prTitle = isFromFern
+    const prTitle = isFromFern
         ? `chore: Update API specifications with fern api update (${date})`
         : `chore: Update OpenAPI specifications (${date})`;
 
-    let prBody = isFromFern
+    const prBody = isFromFern
         ? "Update API specifications by running fern api update."
         : "Update OpenAPI specifications based on changes in the source repository.";
 
@@ -550,4 +711,9 @@ async function createPR(
     return prResponse;
 }
 
-run();
+// Auto-invoke only when running as the action entry point (not when imported in tests).
+// Vitest sets VITEST=true automatically; NODE_ENV is not used because a customer's
+// workflow could set NODE_ENV=test and silently prevent run() from executing.
+if (!process.env.VITEST) {
+    run();
+}
