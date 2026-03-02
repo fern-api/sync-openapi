@@ -148,10 +148,8 @@ function setupMocks({
 async function importAndRun() {
     vi.resetModules();
 
-    await import("./sync");
-
-    // Wait for async operations to complete
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    const { run } = await import("./sync");
+    await run();
 }
 
 beforeEach(() => {

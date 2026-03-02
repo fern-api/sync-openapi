@@ -693,4 +693,7 @@ async function createPR(
     return prResponse;
 }
 
-run();
+// Auto-invoke only when running as the action entry point (not when imported in tests)
+if (process.env.NODE_ENV !== "test") {
+    run();
+}

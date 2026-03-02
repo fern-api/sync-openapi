@@ -39766,7 +39766,10 @@ async function createPR(octokit, owner, repo, branchName, targetBranch, isFromFe
     core.info(`Pull request created: ${prResponse.data.html_url}`);
     return prResponse;
 }
-run();
+// Auto-invoke only when running as the action entry point (not when imported in tests)
+if (process.env.NODE_ENV !== "test") {
+    run();
+}
 
 
 /***/ }),
