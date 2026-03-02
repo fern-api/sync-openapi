@@ -7,7 +7,10 @@ const state = {
     execCalls: [] as [string, string[] | undefined, unknown][], // [cmd, args, opts]
     getInputImpl: (_name: string): string => "",
     getBooleanInputImpl: (_name: string): boolean => false,
-    execImpl: async (): Promise<number> => 0,
+    execImpl: async (
+        _cmd: string,
+        _args?: string[],
+    ): Promise<number> => 0,
     getExecOutputImpl: async (): Promise<{
         stdout: string;
         stderr: string;
@@ -25,6 +28,7 @@ let mockPullsList: ReturnType<typeof vi.fn>;
 let mockPullsCreate: ReturnType<typeof vi.fn>;
 let mockPullsUpdate: ReturnType<typeof vi.fn>;
 let mockGitGetRef: ReturnType<typeof vi.fn>;
+let mockIssuesCreateComment: ReturnType<typeof vi.fn>;
 
 // Factory mocks that delegate to shared state
 vi.mock("@actions/core", () => ({
@@ -56,7 +60,7 @@ vi.mock("@actions/exec", () => ({
             opts?: unknown,
         ): Promise<number> => {
             state.execCalls.push([cmd, args, opts]);
-            return state.execImpl();
+            return state.execImpl(cmd, args);
         },
     ),
     getExecOutput: vi.fn(async () => state.getExecOutputImpl()),
@@ -99,7 +103,7 @@ function setupMocks({
     };
 
     // Setup exec implementations
-    state.execImpl = async () => 0;
+    state.execImpl = async (_cmd: string, _args?: string[]) => 0;
     state.getExecOutputImpl = async () => ({
         stdout: hasChanges ? "M openapi/openapi.json\n" : "",
         stderr: "",
@@ -114,6 +118,7 @@ function setupMocks({
         data: { html_url: "https://github.com/test-owner/test-repo/pull/1" },
     });
     mockPullsUpdate = vi.fn().mockResolvedValue({});
+    mockIssuesCreateComment = vi.fn().mockResolvedValue({});
     mockGitGetRef = branchExists
         ? vi.fn().mockResolvedValue({})
         : vi.fn().mockRejectedValue(new Error("Not found"));
@@ -127,6 +132,9 @@ function setupMocks({
             },
             git: {
                 getRef: mockGitGetRef,
+            },
+            issues: {
+                createComment: mockIssuesCreateComment,
             },
         },
     };
@@ -239,6 +247,113 @@ describe("updateFromSourceSpec", () => {
             expect(pushCall![1]).toContain("--verbose");
             expect(pushCall![1]).toContain("origin");
             expect(pushCall![1]).toContain("update-api");
+        });
+
+        it("should rebase and retry push when regular push fails", async () => {
+            setupMocks({ hasChanges: true, existingPRNumber: null });
+            let pushAttempt = 0;
+            state.execImpl = async (
+                cmd: string,
+                args?: string[],
+            ): Promise<number> => {
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("push")
+                ) {
+                    pushAttempt++;
+                    if (pushAttempt === 1) {
+                        throw new Error("rejected (non-fast-forward)");
+                    }
+                }
+                return 0;
+            };
+            await importAndRun();
+
+            // Should have attempted push twice (initial + after rebase)
+            const pushCalls = state.execCalls.filter(
+                ([cmd, args]) =>
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("push"),
+            );
+            expect(pushCalls.length).toBe(2);
+
+            // Should have done a pull --rebase between pushes
+            const rebasePull = state.execCalls.find(
+                ([cmd, args]) =>
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("pull") &&
+                    args.includes("--rebase"),
+            );
+            expect(rebasePull).toBeDefined();
+
+            // PR should still be created after successful retry
+            expect(mockPullsCreate).toHaveBeenCalledTimes(1);
+        });
+
+        it("should comment on PR when push and rebase both fail", async () => {
+            setupMocks({ hasChanges: true, existingPRNumber: 42 });
+            state.execImpl = async (
+                cmd: string,
+                args?: string[],
+            ): Promise<number> => {
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    (args.includes("push") ||
+                        (args.includes("pull") && args.includes("--rebase")))
+                ) {
+                    throw new Error("merge conflict");
+                }
+                return 0;
+            };
+            await importAndRun();
+
+            // Should NOT create a new PR
+            expect(mockPullsCreate).not.toHaveBeenCalled();
+
+            // Should leave a comment on the existing PR
+            expect(mockIssuesCreateComment).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    owner: "test-owner",
+                    repo: "test-repo",
+                    issue_number: 42,
+                }),
+            );
+
+            // Comment body should mention sync failed
+            const commentCall = mockIssuesCreateComment.mock.calls[0][0];
+            expect(commentCall.body).toContain("Sync failed");
+            expect(commentCall.body).toContain("merge conflicts");
+        });
+
+        it("should call setFailed when push fails and no existing PR to comment on", async () => {
+            setupMocks({ hasChanges: true, existingPRNumber: null });
+            state.execImpl = async (
+                cmd: string,
+                args?: string[],
+            ): Promise<number> => {
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    (args.includes("push") ||
+                        (args.includes("pull") && args.includes("--rebase")))
+                ) {
+                    throw new Error("merge conflict");
+                }
+                return 0;
+            };
+            await importAndRun();
+
+            expect(mockPullsCreate).not.toHaveBeenCalled();
+            expect(mockIssuesCreateComment).not.toHaveBeenCalled();
+            expect(state.setFailedCalls).toEqual(
+                expect.arrayContaining([
+                    expect.stringContaining("Failed to push changes"),
+                ]),
+            );
         });
     });
 

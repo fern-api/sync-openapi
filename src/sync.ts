@@ -101,11 +101,16 @@ async function updateFromSourceSpec(
 
         core.info(`Pushing changes to branch: ${branch}`);
 
-        await exec.exec(
-            "git",
-            ["push", "--verbose", "origin", branch],
-            { silent: false },
+        const pushSucceeded = await pushWithFallback(
+            branch,
+            owner,
+            repo,
+            octokit,
         );
+
+        if (!pushSucceeded) {
+            return;
+        }
 
         if (!autoMerge) {
             const existingPRNumber = await prExists(
@@ -494,6 +499,78 @@ async function pushChanges(
             `Failed to push changes to the repository: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
     }
+}
+
+// Push with fallback: try regular push, then rebase, then force push, then comment on PR
+async function pushWithFallback(
+    branchName: string,
+    owner: string,
+    repo: string,
+    octokit: any,
+): Promise<boolean> {
+    // Try regular push first
+    try {
+        await exec.exec(
+            "git",
+            ["push", "--verbose", "origin", branchName],
+            { silent: false },
+        );
+        return true;
+    } catch {
+        core.info(
+            `Regular push to '${branchName}' failed. Attempting to rebase on remote branch.`,
+        );
+    }
+
+    // Try pull --rebase then push
+    try {
+        await exec.exec("git", ["pull", "--rebase", "origin", branchName], {
+            silent: false,
+        });
+        await exec.exec(
+            "git",
+            ["push", "--verbose", "origin", branchName],
+            { silent: false },
+        );
+        core.info(
+            `Successfully pushed to '${branchName}' after rebasing on remote changes.`,
+        );
+        return true;
+    } catch {
+        core.info(
+            `Rebase failed (likely due to merge conflicts). Aborting rebase.`,
+        );
+        // Abort the rebase so the working tree is clean
+        try {
+            await exec.exec("git", ["rebase", "--abort"], { silent: true });
+        } catch {
+            // rebase --abort can fail if there's no rebase in progress, ignore
+        }
+    }
+
+    // Last resort: leave a comment on the existing PR
+    const existingPRNumber = await prExists(owner, repo, branchName, octokit);
+    if (existingPRNumber) {
+        core.info(
+            `Could not push to '${branchName}' due to conflicts. Leaving a comment on PR #${existingPRNumber}.`,
+        );
+        await octokit.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number: existingPRNumber,
+            body:
+                `⚠️ **Sync failed**: The latest \`fern api update\` detected changes, but they could not be pushed to this branch due to merge conflicts.\n\n` +
+                `**To resolve**, either:\n` +
+                `- Merge or close this PR so the next run creates a fresh one, or\n` +
+                `- Manually rebase this branch on \`${github.context.ref.replace("refs/heads/", "")}\` and re-run the workflow.`,
+        });
+    } else {
+        core.setFailed(
+            `Failed to push changes to '${branchName}' and no existing PR was found to comment on.`,
+        );
+    }
+
+    return false;
 }
 
 // Check if a PR exists for a branch
