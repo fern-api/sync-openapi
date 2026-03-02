@@ -39647,6 +39647,8 @@ async function pushWithFallback(branchName, owner, repo, octokit) {
         core.info(`Regular push to '${branchName}' failed. Attempting to rebase on remote branch.`);
     }
     // Try pull --rebase then push
+    let rebaseErrorMsg = null;
+    let abortErrorMsg = null;
     try {
         await exec.exec("git", ["pull", "--rebase", "origin", branchName], {
             silent: false,
@@ -39655,28 +39657,43 @@ async function pushWithFallback(branchName, owner, repo, octokit) {
         core.info(`Successfully pushed to '${branchName}' after rebasing on remote changes.`);
         return true;
     }
-    catch {
-        core.info(`Rebase failed (likely due to merge conflicts). Aborting rebase.`);
+    catch (rebaseError) {
+        rebaseErrorMsg =
+            rebaseError instanceof Error
+                ? rebaseError.message
+                : "Unknown error";
+        core.info(`Rebase failed (likely due to merge conflicts): ${rebaseErrorMsg}. Aborting rebase.`);
         // Abort the rebase so the working tree is clean
         try {
             await exec.exec("git", ["rebase", "--abort"], { silent: true });
         }
-        catch {
-            // rebase --abort can fail if there's no rebase in progress, ignore
+        catch (abortError) {
+            abortErrorMsg =
+                abortError instanceof Error
+                    ? abortError.message
+                    : "Unknown error";
+            core.info(`rebase --abort failed: ${abortErrorMsg}. The working tree may be in an unexpected state.`);
         }
     }
     // Last resort: leave a comment on the existing PR
     const existingPRNumber = await prExists(owner, repo, branchName, octokit);
     if (existingPRNumber) {
         core.info(`Could not push to '${branchName}' due to conflicts. Leaving a comment on PR #${existingPRNumber}.`);
+        let commentBody = `⚠️ **Sync failed**: The latest \`fern api update\` detected changes, but they could not be pushed to this branch due to merge conflicts.\n\n` +
+            `**To resolve**, either:\n` +
+            `- Merge or close this PR so the next run creates a fresh one, or\n` +
+            `- Manually rebase this branch on \`${github.context.ref.replace("refs/heads/", "")}\` and re-run the workflow.`;
+        if (rebaseErrorMsg) {
+            commentBody += `\n\n**Rebase error:** \`${rebaseErrorMsg}\``;
+        }
+        if (abortErrorMsg) {
+            commentBody += `\n**Rebase abort error:** \`${abortErrorMsg}\` — the working tree may be in an unexpected state.`;
+        }
         await octokit.rest.issues.createComment({
             owner,
             repo,
             issue_number: existingPRNumber,
-            body: `⚠️ **Sync failed**: The latest \`fern api update\` detected changes, but they could not be pushed to this branch due to merge conflicts.\n\n` +
-                `**To resolve**, either:\n` +
-                `- Merge or close this PR so the next run creates a fresh one, or\n` +
-                `- Manually rebase this branch on \`${github.context.ref.replace("refs/heads/", "")}\` and re-run the workflow.`,
+            body: commentBody,
         });
         core.setFailed(`Failed to push changes to '${branchName}' due to conflicts. A comment has been left on PR #${existingPRNumber}.`);
     }
