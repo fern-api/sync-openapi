@@ -26,7 +26,7 @@ interface SyncOptions {
 export async function run(): Promise<void> {
     try {
         const token = core.getInput("token") || process.env.GITHUB_TOKEN;
-        const branch = core.getInput("branch") || "fern/openapi-sync";
+        const branch = core.getInput("branch") || "fern/sync-openapi";
         const autoMerge = core.getBooleanInput("auto_merge");
         const updateFromSource = core.getBooleanInput("update_from_source");
 

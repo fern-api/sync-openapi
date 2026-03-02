@@ -39323,7 +39323,7 @@ const minimatch_1 = __nccwpck_require__(4501);
 async function run() {
     try {
         const token = core.getInput("token") || process.env.GITHUB_TOKEN;
-        const branch = core.getInput("branch") || "fern/openapi-sync";
+        const branch = core.getInput("branch") || "fern/sync-openapi";
         const autoMerge = core.getBooleanInput("auto_merge");
         const updateFromSource = core.getBooleanInput("update_from_source");
         if (!token) {

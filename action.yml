@@ -10,7 +10,7 @@ inputs:
   branch:
     description: 'Branch name to create or update'
     required: false
-    default: 'fern/openapi-sync'
+    default: 'fern/sync-openapi'
   sources:
     description: 'JSON or YAML array of mappings (from source to destination) (only used when update_from_source is false)'
     required: false
