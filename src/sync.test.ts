@@ -11,7 +11,10 @@ const state = {
         _cmd: string,
         _args?: string[],
     ): Promise<number> => 0,
-    getExecOutputImpl: async (): Promise<{
+    getExecOutputImpl: async (
+        _cmd: string,
+        _args?: string[],
+    ): Promise<{
         stdout: string;
         stderr: string;
         exitCode: number;
@@ -64,7 +67,16 @@ vi.mock("@actions/exec", () => ({
             return state.execImpl(cmd, args);
         },
     ),
-    getExecOutput: vi.fn(async () => state.getExecOutputImpl()),
+    getExecOutput: vi.fn(
+        async (
+            cmd: string,
+            args?: string[],
+            opts?: unknown,
+        ) => {
+            state.execCalls.push([cmd, args, opts]);
+            return state.getExecOutputImpl(cmd, args);
+        },
+    ),
 }));
 
 vi.mock("@actions/io", () => ({
@@ -105,7 +117,10 @@ function setupMocks({
 
     // Setup exec implementations
     state.execImpl = async (_cmd: string, _args?: string[]) => 0;
-    state.getExecOutputImpl = async () => ({
+    state.getExecOutputImpl = async (
+        _cmd: string,
+        _args?: string[],
+    ) => ({
         stdout: hasChanges ? "M openapi/openapi.json\n" : "",
         stderr: "",
         exitCode: 0,
@@ -251,6 +266,7 @@ describe("updateFromSourceSpec", () => {
         it("should rebase and retry push when regular push fails", async () => {
             setupMocks({ hasChanges: true, existingPRNumber: null });
             let pushAttempt = 0;
+            // First push via exec throws (regular push)
             state.execImpl = async (
                 cmd: string,
                 args?: string[],
@@ -267,18 +283,24 @@ describe("updateFromSourceSpec", () => {
                 }
                 return 0;
             };
-            await importAndRun();
-
-            // Should have attempted push twice (initial + after rebase)
-            const pushCalls = state.execCalls.filter(
-                ([cmd, args]) =>
+            // Rebase + second push via getExecOutput succeed
+            state.getExecOutputImpl = async (
+                cmd: string,
+                args?: string[],
+            ) => {
+                // git status --porcelain returns changes
+                if (
                     cmd === "git" &&
                     Array.isArray(args) &&
-                    args.includes("push"),
-            );
-            expect(pushCalls.length).toBe(2);
+                    args.includes("--porcelain")
+                ) {
+                    return { stdout: "M openapi/openapi.json\n", stderr: "", exitCode: 0 };
+                }
+                return { stdout: "", stderr: "", exitCode: 0 };
+            };
+            await importAndRun();
 
-            // Should have done a pull --rebase between pushes
+            // Should have done a pull --rebase
             const rebasePull = state.execCalls.find(
                 ([cmd, args]) =>
                     cmd === "git" &&
@@ -294,6 +316,7 @@ describe("updateFromSourceSpec", () => {
 
         it("should comment on PR when push and rebase both fail", async () => {
             setupMocks({ hasChanges: true, existingPRNumber: 42 });
+            // First push via exec throws
             state.execImpl = async (
                 cmd: string,
                 args?: string[],
@@ -301,12 +324,38 @@ describe("updateFromSourceSpec", () => {
                 if (
                     cmd === "git" &&
                     Array.isArray(args) &&
-                    (args.includes("push") ||
-                        (args.includes("pull") && args.includes("--rebase")))
+                    args.includes("push")
                 ) {
-                    throw new Error("merge conflict");
+                    throw new Error("rejected (non-fast-forward)");
                 }
                 return 0;
+            };
+            // Rebase via getExecOutput fails with detailed error
+            state.getExecOutputImpl = async (
+                cmd: string,
+                args?: string[],
+            ) => {
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("--porcelain")
+                ) {
+                    return { stdout: "M openapi/openapi.json\n", stderr: "", exitCode: 0 };
+                }
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("pull") &&
+                    args.includes("--rebase")
+                ) {
+                    return {
+                        stdout: "CONFLICT (content): Merge conflict in fern/openapi/openapi.json",
+                        stderr: "error: could not apply abc1234... Update API",
+                        exitCode: 1,
+                    };
+                }
+                // rebase --abort succeeds
+                return { stdout: "", stderr: "", exitCode: 0 };
             };
             await importAndRun();
 
@@ -322,12 +371,13 @@ describe("updateFromSourceSpec", () => {
                 }),
             );
 
-            // Comment body should mention sync failed and include error details
+            // Comment body should mention sync failed and include detailed error
             const commentCall = mockIssuesCreateComment.mock.calls[0][0];
             expect(commentCall.body).toContain("Sync failed");
             expect(commentCall.body).toContain("merge conflicts");
             expect(commentCall.body).toContain("Rebase error:");
-            expect(commentCall.body).toContain("merge conflict");
+            expect(commentCall.body).toContain("CONFLICT (content)");
+            expect(commentCall.body).toContain("could not apply");
 
             // Action should still fail (not silently succeed)
             expect(state.setFailedCalls).toEqual(
@@ -339,6 +389,7 @@ describe("updateFromSourceSpec", () => {
 
         it("should call setFailed when push fails and no existing PR to comment on", async () => {
             setupMocks({ hasChanges: true, existingPRNumber: null });
+            // First push via exec throws
             state.execImpl = async (
                 cmd: string,
                 args?: string[],
@@ -346,12 +397,33 @@ describe("updateFromSourceSpec", () => {
                 if (
                     cmd === "git" &&
                     Array.isArray(args) &&
-                    (args.includes("push") ||
-                        (args.includes("pull") && args.includes("--rebase")))
+                    args.includes("push")
                 ) {
-                    throw new Error("merge conflict");
+                    throw new Error("rejected (non-fast-forward)");
                 }
                 return 0;
+            };
+            // Rebase via getExecOutput also fails
+            state.getExecOutputImpl = async (
+                cmd: string,
+                args?: string[],
+            ) => {
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("--porcelain")
+                ) {
+                    return { stdout: "M openapi/openapi.json\n", stderr: "", exitCode: 0 };
+                }
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("pull") &&
+                    args.includes("--rebase")
+                ) {
+                    return { stdout: "", stderr: "merge conflict", exitCode: 1 };
+                }
+                return { stdout: "", stderr: "", exitCode: 0 };
             };
             await importAndRun();
 
@@ -366,6 +438,7 @@ describe("updateFromSourceSpec", () => {
 
         it("should include rebase abort error in PR comment when abort fails", async () => {
             setupMocks({ hasChanges: true, existingPRNumber: 42 });
+            // First push via exec throws
             state.execImpl = async (
                 cmd: string,
                 args?: string[],
@@ -373,10 +446,31 @@ describe("updateFromSourceSpec", () => {
                 if (
                     cmd === "git" &&
                     Array.isArray(args) &&
-                    (args.includes("push") ||
-                        (args.includes("pull") && args.includes("--rebase")))
+                    args.includes("push")
                 ) {
-                    throw new Error("merge conflict");
+                    throw new Error("rejected (non-fast-forward)");
+                }
+                return 0;
+            };
+            // Rebase fails AND abort fails via getExecOutput
+            state.getExecOutputImpl = async (
+                cmd: string,
+                args?: string[],
+            ) => {
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("--porcelain")
+                ) {
+                    return { stdout: "M openapi/openapi.json\n", stderr: "", exitCode: 0 };
+                }
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("pull") &&
+                    args.includes("--rebase")
+                ) {
+                    return { stdout: "", stderr: "merge conflict", exitCode: 1 };
                 }
                 if (
                     cmd === "git" &&
@@ -384,9 +478,9 @@ describe("updateFromSourceSpec", () => {
                     args.includes("rebase") &&
                     args.includes("--abort")
                 ) {
-                    throw new Error("no rebase in progress");
+                    return { stdout: "", stderr: "no rebase in progress", exitCode: 1 };
                 }
-                return 0;
+                return { stdout: "", stderr: "", exitCode: 0 };
             };
             await importAndRun();
 

@@ -26,7 +26,7 @@ interface SyncOptions {
 export async function run(): Promise<void> {
     try {
         const token = core.getInput("token") || process.env.GITHUB_TOKEN;
-        const branch = core.getInput("branch", { required: true });
+        const branch = core.getInput("branch") || "fern/openapi-sync";
         const autoMerge = core.getBooleanInput("auto_merge");
         const updateFromSource = core.getBooleanInput("update_from_source");
 
@@ -525,39 +525,64 @@ async function pushWithFallback(
     // Try pull --rebase then push
     let rebaseErrorMsg: string | null = null;
     let abortErrorMsg: string | null = null;
-    try {
-        await exec.exec("git", ["pull", "--rebase", "origin", branchName], {
-            silent: false,
-        });
-        await exec.exec(
+
+    const rebaseResult = await exec.getExecOutput(
+        "git",
+        ["pull", "--rebase", "origin", branchName],
+        { ignoreReturnCode: true },
+    );
+
+    if (rebaseResult.exitCode === 0) {
+        const pushResult = await exec.getExecOutput(
             "git",
             ["push", "--verbose", "origin", branchName],
-            { silent: false },
+            { ignoreReturnCode: true },
         );
-        core.info(
-            `Successfully pushed to '${branchName}' after rebasing on remote changes.`,
-        );
-        return true;
-    } catch (rebaseError) {
-        rebaseErrorMsg =
-            rebaseError instanceof Error
-                ? rebaseError.message
-                : "Unknown error";
-        core.info(
-            `Rebase failed (likely due to merge conflicts): ${rebaseErrorMsg}. Aborting rebase.`,
-        );
-        // Abort the rebase so the working tree is clean
-        try {
-            await exec.exec("git", ["rebase", "--abort"], { silent: true });
-        } catch (abortError) {
-            abortErrorMsg =
-                abortError instanceof Error
-                    ? abortError.message
-                    : "Unknown error";
+
+        if (pushResult.exitCode === 0) {
             core.info(
-                `rebase --abort failed: ${abortErrorMsg}. The working tree may be in an unexpected state.`,
+                `Successfully pushed to '${branchName}' after rebasing on remote changes.`,
             );
+            return true;
         }
+
+        // Push after rebase failed
+        rebaseErrorMsg = [
+            pushResult.stderr.trim(),
+            pushResult.stdout.trim(),
+        ]
+            .filter(Boolean)
+            .join("\n") || `git push failed with exit code ${pushResult.exitCode}`;
+    } else {
+        // Rebase itself failed (merge conflicts)
+        rebaseErrorMsg = [
+            rebaseResult.stderr.trim(),
+            rebaseResult.stdout.trim(),
+        ]
+            .filter(Boolean)
+            .join("\n") || `git pull --rebase failed with exit code ${rebaseResult.exitCode}`;
+    }
+
+    core.info(
+        `Rebase failed (likely due to merge conflicts). Aborting rebase.`,
+    );
+
+    // Abort the rebase so the working tree is clean
+    const abortResult = await exec.getExecOutput(
+        "git",
+        ["rebase", "--abort"],
+        { ignoreReturnCode: true },
+    );
+    if (abortResult.exitCode !== 0) {
+        abortErrorMsg = [
+            abortResult.stderr.trim(),
+            abortResult.stdout.trim(),
+        ]
+            .filter(Boolean)
+            .join("\n") || `rebase --abort failed with exit code ${abortResult.exitCode}`;
+        core.info(
+            `rebase --abort failed: ${abortErrorMsg}. The working tree may be in an unexpected state.`,
+        );
     }
 
     // Last resort: leave a comment on the existing PR
