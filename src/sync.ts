@@ -523,8 +523,10 @@ async function pushWithFallback(
     }
 
     // Try pull --rebase then push
-    let rebaseErrorMsg: string | null = null;
+    let errorMsg: string | null = null;
+    let errorLabel: string = "Rebase error";
     let abortErrorMsg: string | null = null;
+    let rebaseFailed = false;
 
     const rebaseResult = await exec.getExecOutput(
         "git",
@@ -546,60 +548,70 @@ async function pushWithFallback(
             return true;
         }
 
-        // Push after rebase failed
-        rebaseErrorMsg = [
+        // Push after rebase failed — no rebase in progress, don't abort
+        errorLabel = "Push error";
+        errorMsg = [
             pushResult.stderr.trim(),
             pushResult.stdout.trim(),
         ]
             .filter(Boolean)
             .join("\n") || `git push failed with exit code ${pushResult.exitCode}`;
+        core.info(
+            `Push after rebase failed: ${errorMsg}`,
+        );
     } else {
         // Rebase itself failed (merge conflicts)
-        rebaseErrorMsg = [
+        rebaseFailed = true;
+        errorLabel = "Rebase error";
+        errorMsg = [
             rebaseResult.stderr.trim(),
             rebaseResult.stdout.trim(),
         ]
             .filter(Boolean)
             .join("\n") || `git pull --rebase failed with exit code ${rebaseResult.exitCode}`;
-    }
 
-    core.info(
-        `Rebase failed (likely due to merge conflicts). Aborting rebase.`,
-    );
-
-    // Abort the rebase so the working tree is clean
-    const abortResult = await exec.getExecOutput(
-        "git",
-        ["rebase", "--abort"],
-        { ignoreReturnCode: true },
-    );
-    if (abortResult.exitCode !== 0) {
-        abortErrorMsg = [
-            abortResult.stderr.trim(),
-            abortResult.stdout.trim(),
-        ]
-            .filter(Boolean)
-            .join("\n") || `rebase --abort failed with exit code ${abortResult.exitCode}`;
         core.info(
-            `rebase --abort failed: ${abortErrorMsg}. The working tree may be in an unexpected state.`,
+            `Rebase failed (likely due to merge conflicts). Aborting rebase.`,
         );
+
+        // Abort the rebase so the working tree is clean
+        const abortResult = await exec.getExecOutput(
+            "git",
+            ["rebase", "--abort"],
+            { ignoreReturnCode: true },
+        );
+        if (abortResult.exitCode !== 0) {
+            abortErrorMsg = [
+                abortResult.stderr.trim(),
+                abortResult.stdout.trim(),
+            ]
+                .filter(Boolean)
+                .join("\n") || `rebase --abort failed with exit code ${abortResult.exitCode}`;
+            core.info(
+                `rebase --abort failed: ${abortErrorMsg}. The working tree may be in an unexpected state.`,
+            );
+        }
     }
 
     // Last resort: leave a comment on the existing PR
     const existingPRNumber = await prExists(owner, repo, branchName, octokit);
     if (existingPRNumber) {
         core.info(
-            `Could not push to '${branchName}' due to conflicts. Leaving a comment on PR #${existingPRNumber}.`,
+            `Could not push to '${branchName}'. Leaving a comment on PR #${existingPRNumber}.`,
         );
 
+        const failureReason = rebaseFailed
+            ? "merge conflicts"
+            : "a push rejection after successful rebase";
+
         let commentBody =
-            `⚠️ **Sync failed**: The latest \`fern api update\` detected changes, but they could not be pushed to this branch due to merge conflicts.\n\n` +
+            `⚠️ **Sync failed**: The latest \`fern api update\` detected changes, but they could not be pushed to this branch due to ${failureReason}.\n\n` +
             `**To resolve**, either:\n` +
             `- Merge or close this PR so the next run creates a fresh one, or\n` +
             `- Manually rebase this branch on \`${github.context.ref.replace("refs/heads/", "")}\` and re-run the workflow.`;
 
-        if (rebaseErrorMsg) {
-            commentBody += `\n\n**Rebase error:** \`${rebaseErrorMsg}\``;
+        if (errorMsg) {
+            commentBody += `\n\n**${errorLabel}:** \`${errorMsg}\``;
         }
         if (abortErrorMsg) {
             commentBody += `\n**Rebase abort error:** \`${abortErrorMsg}\` — the working tree may be in an unexpected state.`;
@@ -612,7 +624,7 @@ async function pushWithFallback(
             body: commentBody,
         });
         core.setFailed(
-            `Failed to push changes to '${branchName}' due to conflicts. A comment has been left on PR #${existingPRNumber}.`,
+            `Failed to push changes to '${branchName}' due to ${failureReason}. A comment has been left on PR #${existingPRNumber}.`,
         );
     } else {
         core.setFailed(

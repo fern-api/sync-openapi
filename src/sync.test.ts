@@ -387,6 +387,73 @@ describe("updateFromSourceSpec", () => {
             );
         });
 
+        it("should label as 'Push error' when rebase succeeds but post-rebase push fails", async () => {
+            setupMocks({ hasChanges: true, existingPRNumber: 42 });
+            // First push via exec throws
+            state.execImpl = async (
+                cmd: string,
+                args?: string[],
+            ): Promise<number> => {
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("push")
+                ) {
+                    throw new Error("rejected (non-fast-forward)");
+                }
+                return 0;
+            };
+            // Rebase succeeds but post-rebase push fails
+            state.getExecOutputImpl = async (
+                cmd: string,
+                args?: string[],
+            ) => {
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("--porcelain")
+                ) {
+                    return { stdout: "M openapi/openapi.json\n", stderr: "", exitCode: 0 };
+                }
+                // rebase succeeds
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("pull") &&
+                    args.includes("--rebase")
+                ) {
+                    return { stdout: "", stderr: "", exitCode: 0 };
+                }
+                // post-rebase push fails
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("push")
+                ) {
+                    return { stdout: "", stderr: "remote rejected", exitCode: 1 };
+                }
+                return { stdout: "", stderr: "", exitCode: 0 };
+            };
+            await importAndRun();
+
+            const commentCall = mockIssuesCreateComment.mock.calls[0][0];
+            // Should say "Push error", NOT "Rebase error"
+            expect(commentCall.body).toContain("Push error:");
+            expect(commentCall.body).not.toContain("Rebase error:");
+            // Should mention push rejection, not merge conflicts
+            expect(commentCall.body).toContain("push rejection after successful rebase");
+            expect(commentCall.body).not.toContain("merge conflicts");
+            // Should NOT have run rebase --abort (no rebase in progress)
+            const abortCall = state.execCalls.find(
+                ([cmd, args]) =>
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("rebase") &&
+                    args.includes("--abort"),
+            );
+            expect(abortCall).toBeUndefined();
+        });
+
         it("should call setFailed when push fails and no existing PR to comment on", async () => {
             setupMocks({ hasChanges: true, existingPRNumber: null });
             // First push via exec throws
