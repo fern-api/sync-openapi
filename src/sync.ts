@@ -160,7 +160,10 @@ async function updateTargetSpec(
     } catch (yamlError) {
         try {
             fileMapping = JSON.parse(fileMappingInput) as SourceMapping[];
-        } catch (_jsonError) {
+        } catch (jsonError) {
+            core.debug(
+                `JSON parse also failed: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`,
+            );
             throw new Error(
                 `Failed to parse 'sources' input as either YAML or JSON. Please check the format. Error: ${(yamlError as Error).message}`,
             );
@@ -198,7 +201,10 @@ async function runFernApiUpdate(): Promise<void> {
         try {
             await exec.exec("fern", ["--version"], { silent: true });
             core.info("Fern CLI is already installed");
-        } catch (_error) {
+        } catch (error) {
+            core.debug(
+                `Fern CLI check failed: ${error instanceof Error ? error.message : String(error)}`,
+            );
             core.info("Fern CLI not found. Installing Fern CLI...");
             await exec.exec("npm", ["install", "-g", "fern-api"]);
         }
@@ -250,7 +256,10 @@ async function cloneRepository(options: SyncOptions): Promise<void> {
 
     try {
         await exec.exec("git", ["clone", repoUrl, repoDir]);
-    } catch (_error) {
+    } catch (error) {
+        core.debug(
+            `Clone error: ${error instanceof Error ? error.message : String(error)}`,
+        );
         throw new Error(
             `Failed to clone repository. Please ensure your token has 'repo' scope and you have write access to ${options.repository}.`,
         );

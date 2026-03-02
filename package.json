@@ -6,8 +6,8 @@
     "build:sync": "ncc build src/sync.ts -o dist",
     "build": "npm run build:sync",
     "test": "vitest run",
-    "lint": "npx @biomejs/biome check src/ e2e/",
-    "format": "npx @biomejs/biome check --write src/ e2e/"
+    "lint": "biome check src/ e2e/",
+    "format": "biome check --write src/ e2e/"
   },
   "keywords": [
     "github",
@@ -29,10 +29,10 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.5",
     "@types/js-yaml": "^4.0.5",
-    "@types/node": "^18.15.11",
+    "@types/node": "^20.0.0",
     "@vercel/ncc": "^0.36.1",
     "typescript": "^5.0.4",
-    "vitest": "^2.1.9"
+    "vitest": "^4.0.18"
   },
   "overrides": {
     "undici": "^6.23.0"
