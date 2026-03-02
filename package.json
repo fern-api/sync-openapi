@@ -5,7 +5,7 @@
   "scripts": {
     "build:sync": "ncc build src/sync.ts -o dist",
     "build": "npm run build:sync",
-    "test": "jest",
+    "test": "vitest run",
     "lint": "eslint src/**/*.ts"
   },
   "keywords": [
@@ -26,13 +26,11 @@
     "minimatch": "^10.2.3"
   },
   "devDependencies": {
-    "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.5",
     "@types/node": "^18.15.11",
     "@vercel/ncc": "^0.36.1",
-    "jest": "^30.2.0",
-    "ts-jest": "^29.4.6",
-    "typescript": "^5.0.4"
+    "typescript": "^5.0.4",
+    "vitest": "^2.1.9"
   },
   "overrides": {
     "undici": "^6.23.0"

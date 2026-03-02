@@ -1,36 +1,89 @@
-import * as core from "@actions/core";
-import * as github from "@actions/github";
-import * as exec from "@actions/exec";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock all external dependencies
-jest.mock("@actions/core");
-jest.mock("@actions/github");
-jest.mock("@actions/exec");
-jest.mock("@actions/io");
+// Use shared state objects so mocks across resetModules don't create circular refs
+const state = {
+    infoCalls: [] as string[],
+    setFailedCalls: [] as string[],
+    execCalls: [] as [string, string[] | undefined, unknown][], // [cmd, args, opts]
+    getInputImpl: (_name: string): string => "",
+    getBooleanInputImpl: (_name: string): boolean => false,
+    execImpl: async (): Promise<number> => 0,
+    getExecOutputImpl: async (): Promise<{
+        stdout: string;
+        stderr: string;
+        exitCode: number;
+    }> => ({
+        stdout: "",
+        stderr: "",
+        exitCode: 0,
+    }),
+    mockOctokit: null as any,
+};
 
-const mockedCore = core as jest.Mocked<typeof core>;
-const mockedExec = exec as jest.Mocked<typeof exec>;
+// Shared mock state for octokit calls
+let mockPullsList: ReturnType<typeof vi.fn>;
+let mockPullsCreate: ReturnType<typeof vi.fn>;
+let mockPullsUpdate: ReturnType<typeof vi.fn>;
+let mockGitGetRef: ReturnType<typeof vi.fn>;
 
-// Shared mock state for octokit
-let mockPullsList: jest.Mock;
-let mockPullsCreate: jest.Mock;
-let mockPullsUpdate: jest.Mock;
-let mockGitGetRef: jest.Mock;
+// Factory mocks that delegate to shared state
+vi.mock("@actions/core", () => ({
+    getInput: vi.fn((...args: any[]) => state.getInputImpl(args[0])),
+    getBooleanInput: vi.fn((...args: any[]) =>
+        state.getBooleanInputImpl(args[0]),
+    ),
+    info: vi.fn((msg: string) => {
+        state.infoCalls.push(msg);
+    }),
+    setFailed: vi.fn((msg: string) => {
+        state.setFailedCalls.push(msg);
+    }),
+}));
+
+vi.mock("@actions/github", () => ({
+    getOctokit: vi.fn(() => state.mockOctokit),
+    context: {
+        repo: { owner: "test-owner", repo: "test-repo" },
+        ref: "refs/heads/main",
+    },
+}));
+
+vi.mock("@actions/exec", () => ({
+    exec: vi.fn(
+        async (
+            cmd: string,
+            args?: string[],
+            opts?: unknown,
+        ): Promise<number> => {
+            state.execCalls.push([cmd, args, opts]);
+            return state.execImpl();
+        },
+    ),
+    getExecOutput: vi.fn(async () => state.getExecOutputImpl()),
+}));
+
+vi.mock("@actions/io", () => ({
+    mkdirP: vi.fn(),
+}));
 
 function setupMocks({
     hasChanges = true,
     existingPRNumber = null as number | null,
     branchExists = false,
+    autoMerge = false,
 }: {
     hasChanges?: boolean;
     existingPRNumber?: number | null;
     branchExists?: boolean;
+    autoMerge?: boolean;
 } = {}) {
-    // Reset all mocks
-    jest.clearAllMocks();
+    // Reset shared state
+    state.infoCalls = [];
+    state.setFailedCalls = [];
+    state.execCalls = [];
 
-    // Setup core mocks
-    mockedCore.getInput.mockImplementation((name: string) => {
+    // Setup input implementations
+    state.getInputImpl = (name: string): string => {
         const inputs: Record<string, string> = {
             token: "fake-token",
             branch: "update-api",
@@ -38,36 +91,34 @@ function setupMocks({
             update_from_source: "true",
         };
         return inputs[name] || "";
-    });
-    mockedCore.getBooleanInput.mockImplementation((name: string) => {
-        if (name === "auto_merge") return false;
+    };
+    state.getBooleanInputImpl = (name: string): boolean => {
+        if (name === "auto_merge") return autoMerge;
         if (name === "update_from_source") return true;
         return false;
-    });
-    mockedCore.info.mockImplementation(() => {});
-    mockedCore.setFailed.mockImplementation(() => {});
+    };
 
-    // Setup exec mocks
-    mockedExec.exec.mockResolvedValue(0);
-    mockedExec.getExecOutput.mockResolvedValue({
+    // Setup exec implementations
+    state.execImpl = async () => 0;
+    state.getExecOutputImpl = async () => ({
         stdout: hasChanges ? "M openapi/openapi.json\n" : "",
         stderr: "",
         exitCode: 0,
     });
 
-    // Setup GitHub context
-    mockPullsList = jest.fn().mockResolvedValue({
+    // Setup GitHub octokit mocks
+    mockPullsList = vi.fn().mockResolvedValue({
         data: existingPRNumber ? [{ number: existingPRNumber }] : [],
     });
-    mockPullsCreate = jest.fn().mockResolvedValue({
+    mockPullsCreate = vi.fn().mockResolvedValue({
         data: { html_url: "https://github.com/test-owner/test-repo/pull/1" },
     });
-    mockPullsUpdate = jest.fn().mockResolvedValue({});
+    mockPullsUpdate = vi.fn().mockResolvedValue({});
     mockGitGetRef = branchExists
-        ? jest.fn().mockResolvedValue({})
-        : jest.fn().mockRejectedValue(new Error("Not found"));
+        ? vi.fn().mockResolvedValue({})
+        : vi.fn().mockRejectedValue(new Error("Not found"));
 
-    const mockOctokit = {
+    state.mockOctokit = {
         rest: {
             pulls: {
                 list: mockPullsList,
@@ -79,45 +130,23 @@ function setupMocks({
             },
         },
     };
-
-    (github as any).getOctokit = jest.fn().mockReturnValue(mockOctokit);
-    (github as any).context = {
-        repo: { owner: "test-owner", repo: "test-repo" },
-        ref: "refs/heads/main",
-    };
 }
 
-// We need to re-import the module for each test since it calls run() on import
-// Instead, let's isolate the module import
-function importAndRun() {
-    // Clear the module cache so we get a fresh import (which calls run())
-    jest.resetModules();
-    // Re-mock after resetModules
-    jest.mock("@actions/core");
-    jest.mock("@actions/github");
-    jest.mock("@actions/exec");
-    jest.mock("@actions/io");
+async function importAndRun() {
+    vi.resetModules();
 
-    // Re-apply our mock implementations (since resetModules clears them)
-    const freshCore = require("@actions/core");
-    const freshGithub = require("@actions/github");
-    const freshExec = require("@actions/exec");
+    await import("./sync");
 
-    // Copy mock implementations
-    freshCore.getInput = mockedCore.getInput;
-    freshCore.getBooleanInput = mockedCore.getBooleanInput;
-    freshCore.info = mockedCore.info;
-    freshCore.setFailed = mockedCore.setFailed;
-    freshExec.exec = mockedExec.exec;
-    freshExec.getExecOutput = mockedExec.getExecOutput;
-
-    Object.assign(freshGithub, {
-        getOctokit: (github as any).getOctokit,
-        context: (github as any).context,
-    });
-
-    return require("./sync");
+    // Wait for async operations to complete
+    await new Promise((resolve) => setTimeout(resolve, 200));
 }
+
+beforeEach(() => {
+    vi.clearAllMocks();
+    state.infoCalls = [];
+    state.setFailedCalls = [];
+    state.execCalls = [];
+});
 
 describe("updateFromSourceSpec", () => {
     describe("when changes are detected and no existing PR", () => {
@@ -125,10 +154,6 @@ describe("updateFromSourceSpec", () => {
             setupMocks({ hasChanges: true, existingPRNumber: null });
             await importAndRun();
 
-            // Wait for async operations to complete
-            await new Promise((resolve) => setTimeout(resolve, 100));
-
-            // Verify PR was created
             expect(mockPullsCreate).toHaveBeenCalledWith(
                 expect.objectContaining({
                     owner: "test-owner",
@@ -139,12 +164,10 @@ describe("updateFromSourceSpec", () => {
             );
         });
 
-        it("should not call pulls.list for existing PRs and then create", async () => {
+        it("should check for existing PRs before creating", async () => {
             setupMocks({ hasChanges: true, existingPRNumber: null });
             await importAndRun();
-            await new Promise((resolve) => setTimeout(resolve, 100));
 
-            // Verify prExists was called (pulls.list)
             expect(mockPullsList).toHaveBeenCalledWith(
                 expect.objectContaining({
                     owner: "test-owner",
@@ -154,7 +177,6 @@ describe("updateFromSourceSpec", () => {
                 }),
             );
 
-            // Verify a new PR was created
             expect(mockPullsCreate).toHaveBeenCalledTimes(1);
         });
     });
@@ -163,9 +185,7 @@ describe("updateFromSourceSpec", () => {
         it("should NOT create a new PR", async () => {
             setupMocks({ hasChanges: true, existingPRNumber: 42 });
             await importAndRun();
-            await new Promise((resolve) => setTimeout(resolve, 100));
 
-            // Verify pulls.list was called to check for existing PRs
             expect(mockPullsList).toHaveBeenCalledWith(
                 expect.objectContaining({
                     owner: "test-owner",
@@ -175,17 +195,17 @@ describe("updateFromSourceSpec", () => {
                 }),
             );
 
-            // Verify NO new PR was created
             expect(mockPullsCreate).not.toHaveBeenCalled();
         });
 
         it("should log that the existing PR was reused", async () => {
             setupMocks({ hasChanges: true, existingPRNumber: 42 });
             await importAndRun();
-            await new Promise((resolve) => setTimeout(resolve, 100));
 
-            expect(mockedCore.info).toHaveBeenCalledWith(
-                expect.stringContaining("PR #42 already exists"),
+            expect(state.infoCalls).toEqual(
+                expect.arrayContaining([
+                    expect.stringContaining("PR #42 already exists"),
+                ]),
             );
         });
     });
@@ -194,13 +214,9 @@ describe("updateFromSourceSpec", () => {
         it("should not push or create a PR", async () => {
             setupMocks({ hasChanges: false });
             await importAndRun();
-            await new Promise((resolve) => setTimeout(resolve, 100));
 
-            // Verify no PR was created
             expect(mockPullsCreate).not.toHaveBeenCalled();
-            // Verify no push happened (push is the 5th exec call after git config x2, checkout, fern --version, fern api update)
-            // Actually, let's check that the "no changes" log was emitted
-            expect(mockedCore.info).toHaveBeenCalledWith(
+            expect(state.infoCalls).toContain(
                 "No changes detected from fern api update. Skipping further actions.",
             );
         });
@@ -210,18 +226,15 @@ describe("updateFromSourceSpec", () => {
         it("should push without --force flag", async () => {
             setupMocks({ hasChanges: true, existingPRNumber: null });
             await importAndRun();
-            await new Promise((resolve) => setTimeout(resolve, 100));
 
-            // Find the push call among all exec calls
-            const pushCall = mockedExec.exec.mock.calls.find(
-                (call) =>
-                    call[0] === "git" &&
-                    Array.isArray(call[1]) &&
-                    call[1].includes("push"),
+            const pushCall = state.execCalls.find(
+                ([cmd, args]) =>
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("push"),
             );
 
             expect(pushCall).toBeDefined();
-            // Verify --force is NOT in the push args
             expect(pushCall![1]).not.toContain("--force");
             expect(pushCall![1]).toContain("--verbose");
             expect(pushCall![1]).toContain("origin");
@@ -231,25 +244,16 @@ describe("updateFromSourceSpec", () => {
 
     describe("when auto_merge is true", () => {
         it("should not check for existing PRs or create new ones", async () => {
-            setupMocks({ hasChanges: true });
-
-            // Override auto_merge to true
-            mockedCore.getBooleanInput.mockImplementation((name: string) => {
-                if (name === "auto_merge") return true;
-                if (name === "update_from_source") return true;
-                return false;
-            });
-
+            setupMocks({ hasChanges: true, autoMerge: true });
             await importAndRun();
-            await new Promise((resolve) => setTimeout(resolve, 100));
 
-            // Verify no PR operations
             expect(mockPullsList).not.toHaveBeenCalled();
             expect(mockPullsCreate).not.toHaveBeenCalled();
 
-            // Verify auto-merge message
-            expect(mockedCore.info).toHaveBeenCalledWith(
-                expect.stringContaining("auto-merge is enabled"),
+            expect(state.infoCalls).toEqual(
+                expect.arrayContaining([
+                    expect.stringContaining("auto-merge is enabled"),
+                ]),
             );
         });
     });
