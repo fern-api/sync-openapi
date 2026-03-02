@@ -39636,7 +39636,7 @@ async function pushChanges(branchName, options) {
         throw new Error(`Failed to push changes to the repository: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
 }
-// Push with fallback: try regular push, then rebase, then force push, then comment on PR
+// Push with fallback: try regular push, then rebase + push, then comment on PR with error details
 async function pushWithFallback(branchName, owner, repo, octokit) {
     // Try regular push first
     try {

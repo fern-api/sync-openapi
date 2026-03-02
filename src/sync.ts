@@ -501,7 +501,7 @@ async function pushChanges(
     }
 }
 
-// Push with fallback: try regular push, then rebase, then force push, then comment on PR
+// Push with fallback: try regular push, then rebase + push, then comment on PR with error details
 async function pushWithFallback(
     branchName: string,
     owner: string,
