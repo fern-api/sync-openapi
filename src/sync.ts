@@ -564,6 +564,9 @@ async function pushWithFallback(
                 `- Merge or close this PR so the next run creates a fresh one, or\n` +
                 `- Manually rebase this branch on \`${github.context.ref.replace("refs/heads/", "")}\` and re-run the workflow.`,
         });
+        core.setFailed(
+            `Failed to push changes to '${branchName}' due to conflicts. A comment has been left on PR #${existingPRNumber}.`,
+        );
     } else {
         core.setFailed(
             `Failed to push changes to '${branchName}' and no existing PR was found to comment on.`,

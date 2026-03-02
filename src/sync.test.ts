@@ -327,6 +327,13 @@ describe("updateFromSourceSpec", () => {
             const commentCall = mockIssuesCreateComment.mock.calls[0][0];
             expect(commentCall.body).toContain("Sync failed");
             expect(commentCall.body).toContain("merge conflicts");
+
+            // Action should still fail (not silently succeed)
+            expect(state.setFailedCalls).toEqual(
+                expect.arrayContaining([
+                    expect.stringContaining("conflicts"),
+                ]),
+            );
         });
 
         it("should call setFailed when push fails and no existing PR to comment on", async () => {
