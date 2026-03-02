@@ -376,6 +376,7 @@ describe("updateFromSourceSpec", () => {
             expect(commentCall.body).toContain("Sync failed");
             expect(commentCall.body).toContain("merge conflicts");
             expect(commentCall.body).toContain("Rebase error:");
+            expect(commentCall.body).toContain("```");
             expect(commentCall.body).toContain("CONFLICT (content)");
             expect(commentCall.body).toContain("could not apply");
 
@@ -553,6 +554,7 @@ describe("updateFromSourceSpec", () => {
 
             const commentCall = mockIssuesCreateComment.mock.calls[0][0];
             expect(commentCall.body).toContain("Rebase error:");
+            expect(commentCall.body).toContain("```");
             expect(commentCall.body).toContain("merge conflict");
             expect(commentCall.body).toContain("Rebase abort error:");
             expect(commentCall.body).toContain("no rebase in progress");

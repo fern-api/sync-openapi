@@ -611,10 +611,10 @@ async function pushWithFallback(
             `- Manually rebase this branch on \`${github.context.ref.replace("refs/heads/", "")}\` and re-run the workflow.`;
 
         if (errorMsg) {
-            commentBody += `\n\n**${errorLabel}:** \`${errorMsg}\``;
+            commentBody += `\n\n**${errorLabel}:**\n\`\`\`\n${errorMsg}\n\`\`\``;
         }
         if (abortErrorMsg) {
-            commentBody += `\n**Rebase abort error:** \`${abortErrorMsg}\` — the working tree may be in an unexpected state.`;
+            commentBody += `\n\n**Rebase abort error:**\n\`\`\`\n${abortErrorMsg}\n\`\`\`\n— the working tree may be in an unexpected state.`;
         }
 
         await octokit.rest.issues.createComment({
