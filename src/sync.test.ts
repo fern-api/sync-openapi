@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Use shared state objects so mocks across resetModules don't create circular refs
 const state = {
@@ -7,10 +7,7 @@ const state = {
     execCalls: [] as [string, string[] | undefined, unknown][], // [cmd, args, opts]
     getInputImpl: (_name: string): string => "",
     getBooleanInputImpl: (_name: string): boolean => false,
-    execImpl: async (
-        _cmd: string,
-        _args?: string[],
-    ): Promise<number> => 0,
+    execImpl: async (_cmd: string, _args?: string[]): Promise<number> => 0,
     getExecOutputImpl: async (
         _cmd: string,
         _args?: string[],
@@ -68,11 +65,7 @@ vi.mock("@actions/exec", () => ({
         },
     ),
     getExecOutput: vi.fn(
-        async (
-            cmd: string,
-            args?: string[],
-            opts?: unknown,
-        ) => {
+        async (cmd: string, args?: string[], opts?: unknown) => {
             state.execCalls.push([cmd, args, opts]);
             return state.getExecOutputImpl(cmd, args);
         },
@@ -117,10 +110,7 @@ function setupMocks({
 
     // Setup exec implementations
     state.execImpl = async (_cmd: string, _args?: string[]) => 0;
-    state.getExecOutputImpl = async (
-        _cmd: string,
-        _args?: string[],
-    ) => ({
+    state.getExecOutputImpl = async (_cmd: string, _args?: string[]) => ({
         stdout: hasChanges ? "M openapi/openapi.json\n" : "",
         stderr: "",
         exitCode: 0,
@@ -257,10 +247,10 @@ describe("updateFromSourceSpec", () => {
             );
 
             expect(pushCall).toBeDefined();
-            expect(pushCall![1]).not.toContain("--force");
-            expect(pushCall![1]).toContain("--verbose");
-            expect(pushCall![1]).toContain("origin");
-            expect(pushCall![1]).toContain("update-api");
+            expect(pushCall?.[1]).not.toContain("--force");
+            expect(pushCall?.[1]).toContain("--verbose");
+            expect(pushCall?.[1]).toContain("origin");
+            expect(pushCall?.[1]).toContain("update-api");
         });
 
         it("should rebase and retry push when regular push fails", async () => {
@@ -284,17 +274,18 @@ describe("updateFromSourceSpec", () => {
                 return 0;
             };
             // Rebase + second push via getExecOutput succeed
-            state.getExecOutputImpl = async (
-                cmd: string,
-                args?: string[],
-            ) => {
+            state.getExecOutputImpl = async (cmd: string, args?: string[]) => {
                 // git status --porcelain returns changes
                 if (
                     cmd === "git" &&
                     Array.isArray(args) &&
                     args.includes("--porcelain")
                 ) {
-                    return { stdout: "M openapi/openapi.json\n", stderr: "", exitCode: 0 };
+                    return {
+                        stdout: "M openapi/openapi.json\n",
+                        stderr: "",
+                        exitCode: 0,
+                    };
                 }
                 return { stdout: "", stderr: "", exitCode: 0 };
             };
@@ -331,16 +322,17 @@ describe("updateFromSourceSpec", () => {
                 return 0;
             };
             // Rebase via getExecOutput fails with detailed error
-            state.getExecOutputImpl = async (
-                cmd: string,
-                args?: string[],
-            ) => {
+            state.getExecOutputImpl = async (cmd: string, args?: string[]) => {
                 if (
                     cmd === "git" &&
                     Array.isArray(args) &&
                     args.includes("--porcelain")
                 ) {
-                    return { stdout: "M openapi/openapi.json\n", stderr: "", exitCode: 0 };
+                    return {
+                        stdout: "M openapi/openapi.json\n",
+                        stderr: "",
+                        exitCode: 0,
+                    };
                 }
                 if (
                     cmd === "git" &&
@@ -382,9 +374,7 @@ describe("updateFromSourceSpec", () => {
 
             // Action should still fail (not silently succeed)
             expect(state.setFailedCalls).toEqual(
-                expect.arrayContaining([
-                    expect.stringContaining("conflicts"),
-                ]),
+                expect.arrayContaining([expect.stringContaining("conflicts")]),
             );
         });
 
@@ -405,16 +395,17 @@ describe("updateFromSourceSpec", () => {
                 return 0;
             };
             // Rebase succeeds but post-rebase push fails
-            state.getExecOutputImpl = async (
-                cmd: string,
-                args?: string[],
-            ) => {
+            state.getExecOutputImpl = async (cmd: string, args?: string[]) => {
                 if (
                     cmd === "git" &&
                     Array.isArray(args) &&
                     args.includes("--porcelain")
                 ) {
-                    return { stdout: "M openapi/openapi.json\n", stderr: "", exitCode: 0 };
+                    return {
+                        stdout: "M openapi/openapi.json\n",
+                        stderr: "",
+                        exitCode: 0,
+                    };
                 }
                 // rebase succeeds
                 if (
@@ -431,7 +422,11 @@ describe("updateFromSourceSpec", () => {
                     Array.isArray(args) &&
                     args.includes("push")
                 ) {
-                    return { stdout: "", stderr: "remote rejected", exitCode: 1 };
+                    return {
+                        stdout: "",
+                        stderr: "remote rejected",
+                        exitCode: 1,
+                    };
                 }
                 return { stdout: "", stderr: "", exitCode: 0 };
             };
@@ -442,7 +437,9 @@ describe("updateFromSourceSpec", () => {
             expect(commentCall.body).toContain("Push error:");
             expect(commentCall.body).not.toContain("Rebase error:");
             // Should mention push rejection, not merge conflicts
-            expect(commentCall.body).toContain("push rejection after successful rebase");
+            expect(commentCall.body).toContain(
+                "push rejection after successful rebase",
+            );
             expect(commentCall.body).not.toContain("merge conflicts");
             // Should NOT have run rebase --abort (no rebase in progress)
             const abortCall = state.execCalls.find(
@@ -472,16 +469,17 @@ describe("updateFromSourceSpec", () => {
                 return 0;
             };
             // Rebase via getExecOutput also fails
-            state.getExecOutputImpl = async (
-                cmd: string,
-                args?: string[],
-            ) => {
+            state.getExecOutputImpl = async (cmd: string, args?: string[]) => {
                 if (
                     cmd === "git" &&
                     Array.isArray(args) &&
                     args.includes("--porcelain")
                 ) {
-                    return { stdout: "M openapi/openapi.json\n", stderr: "", exitCode: 0 };
+                    return {
+                        stdout: "M openapi/openapi.json\n",
+                        stderr: "",
+                        exitCode: 0,
+                    };
                 }
                 if (
                     cmd === "git" &&
@@ -489,7 +487,11 @@ describe("updateFromSourceSpec", () => {
                     args.includes("pull") &&
                     args.includes("--rebase")
                 ) {
-                    return { stdout: "", stderr: "merge conflict", exitCode: 1 };
+                    return {
+                        stdout: "",
+                        stderr: "merge conflict",
+                        exitCode: 1,
+                    };
                 }
                 return { stdout: "", stderr: "", exitCode: 0 };
             };
@@ -521,16 +523,17 @@ describe("updateFromSourceSpec", () => {
                 return 0;
             };
             // Rebase fails AND abort fails via getExecOutput
-            state.getExecOutputImpl = async (
-                cmd: string,
-                args?: string[],
-            ) => {
+            state.getExecOutputImpl = async (cmd: string, args?: string[]) => {
                 if (
                     cmd === "git" &&
                     Array.isArray(args) &&
                     args.includes("--porcelain")
                 ) {
-                    return { stdout: "M openapi/openapi.json\n", stderr: "", exitCode: 0 };
+                    return {
+                        stdout: "M openapi/openapi.json\n",
+                        stderr: "",
+                        exitCode: 0,
+                    };
                 }
                 if (
                     cmd === "git" &&
@@ -538,7 +541,11 @@ describe("updateFromSourceSpec", () => {
                     args.includes("pull") &&
                     args.includes("--rebase")
                 ) {
-                    return { stdout: "", stderr: "merge conflict", exitCode: 1 };
+                    return {
+                        stdout: "",
+                        stderr: "merge conflict",
+                        exitCode: 1,
+                    };
                 }
                 if (
                     cmd === "git" &&
@@ -546,7 +553,11 @@ describe("updateFromSourceSpec", () => {
                     args.includes("rebase") &&
                     args.includes("--abort")
                 ) {
-                    return { stdout: "", stderr: "no rebase in progress", exitCode: 1 };
+                    return {
+                        stdout: "",
+                        stderr: "no rebase in progress",
+                        exitCode: 1,
+                    };
                 }
                 return { stdout: "", stderr: "", exitCode: 0 };
             };

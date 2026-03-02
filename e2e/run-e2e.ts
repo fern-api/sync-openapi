@@ -74,7 +74,9 @@ async function githubApi(
 
     if (!resp.ok) {
         const text = await resp.text();
-        throw new Error(`GitHub API ${resp.status} ${resp.statusText}: ${text}`);
+        throw new Error(
+            `GitHub API ${resp.status} ${resp.statusText}: ${text}`,
+        );
     }
 
     // 204 No Content
@@ -128,16 +130,18 @@ async function updateSourceSpec(): Promise<void> {
                     operationId: "getStatus",
                     summary: `Status v${specVersion}`,
                     responses: {
-                        "200": { description: `Returns status v${specVersion}` },
+                        "200": {
+                            description: `Returns status v${specVersion}`,
+                        },
                     },
                 },
             },
         },
     };
 
-    const content = Buffer.from(
-        JSON.stringify(spec, null, 2) + "\n",
-    ).toString("base64");
+    const content = Buffer.from(`${JSON.stringify(spec, null, 2)}\n`).toString(
+        "base64",
+    );
     const sha = await getFileSha(SOURCE_SPEC_PATH);
 
     await githubApi(`/repos/${OWNER}/${REPO}/contents/${SOURCE_SPEC_PATH}`, {
@@ -241,9 +245,7 @@ async function waitForWorkflowRun(
         const runs: WorkflowRun[] = data.workflow_runs;
 
         // Find a run that started after our trigger
-        const run = runs.find(
-            (r: any) => new Date(r.created_at) > afterDate,
-        );
+        const run = runs.find((r: any) => new Date(r.created_at) > afterDate);
 
         if (run) {
             if (run.status === "completed") {
@@ -279,9 +281,7 @@ async function getPRCommitCount(prNumber: number): Promise<number> {
 }
 
 async function getPRComments(prNumber: number): Promise<GitHubComment[]> {
-    return githubApi(
-        `/repos/${OWNER}/${REPO}/issues/${prNumber}/comments`,
-    );
+    return githubApi(`/repos/${OWNER}/${REPO}/issues/${prNumber}/comments`);
 }
 
 async function pushConflictingCommit(branchSha: string): Promise<void> {
@@ -327,26 +327,20 @@ async function pushConflictingCommit(branchSha: string): Promise<void> {
     });
 
     // Create a commit
-    const newCommit = await githubApi(
-        `/repos/${OWNER}/${REPO}/git/commits`,
-        {
-            method: "POST",
-            body: {
-                message: "Conflicting change to force merge conflict",
-                tree: tree.sha,
-                parents: [branchSha],
-            },
+    const newCommit = await githubApi(`/repos/${OWNER}/${REPO}/git/commits`, {
+        method: "POST",
+        body: {
+            message: "Conflicting change to force merge conflict",
+            tree: tree.sha,
+            parents: [branchSha],
         },
-    );
+    });
 
     // Update the branch ref
-    await githubApi(
-        `/repos/${OWNER}/${REPO}/git/refs/heads/${BRANCH}`,
-        {
-            method: "PATCH",
-            body: { sha: newCommit.sha, force: true },
-        },
-    );
+    await githubApi(`/repos/${OWNER}/${REPO}/git/refs/heads/${BRANCH}`, {
+        method: "PATCH",
+        body: { sha: newCommit.sha, force: true },
+    });
 
     console.log(`  Pushed conflicting commit ${newCommit.sha} to ${BRANCH}`);
 }
@@ -356,7 +350,9 @@ async function pushConflictingCommit(branchSha: string): Promise<void> {
 async function testHappyPath(): Promise<void> {
     console.log("\n=== TEST: Happy Path ===");
 
-    console.log("Step 1: Update source spec and trigger workflow (first run - should create PR)");
+    console.log(
+        "Step 1: Update source spec and trigger workflow (first run - should create PR)",
+    );
     await updateSourceSpec();
 
     const before1 = new Date();
@@ -379,7 +375,9 @@ async function testHappyPath(): Promise<void> {
     const commits1 = await getPRCommitCount(prNumber);
     console.log(`  PR #${prNumber} created with ${commits1} commit(s)`);
 
-    console.log("\nStep 2: Reset fern spec on PR branch and trigger workflow (should reuse existing PR)");
+    console.log(
+        "\nStep 2: Reset fern spec on PR branch and trigger workflow (should reuse existing PR)",
+    );
     // Instead of changing the source spec (which is subject to raw.githubusercontent.com CDN cache),
     // we reset fern/openapi/openapi.json on the update-api branch to {} so that fern api update
     // will write the (cached) origin content and produce a git diff.
@@ -415,7 +413,9 @@ async function testHappyPath(): Promise<void> {
         );
     }
 
-    console.log(`  Still 1 PR (#${prNumber}), commits: ${commits1} → ${commits2}`);
+    console.log(
+        `  Still 1 PR (#${prNumber}), commits: ${commits1} → ${commits2}`,
+    );
     console.log("  PASS: Happy path\n");
 }
 
@@ -434,12 +434,16 @@ async function testConflictPath(): Promise<void> {
     const branchData = await githubApi(
         `/repos/${OWNER}/${REPO}/git/refs/heads/${BRANCH}`,
     );
-    const currentSha = branchData.object.sha;
+    const _currentSha = branchData.object.sha;
 
-    console.log("Step 1: Reset fern spec on PR branch so fern api update will produce a diff");
+    console.log(
+        "Step 1: Reset fern spec on PR branch so fern api update will produce a diff",
+    );
     await resetFernSpec(BRANCH);
 
-    console.log("Step 2: Trigger workflow and push conflicting commit during fern install window");
+    console.log(
+        "Step 2: Trigger workflow and push conflicting commit during fern install window",
+    );
     // The workflow takes ~5-10s to install fern-api. During this window,
     // we push a commit to origin/update-api that the action won't have locally,
     // causing its subsequent push to fail (remote has commits the local doesn't).
@@ -448,7 +452,9 @@ async function testConflictPath(): Promise<void> {
 
     // Wait for the workflow to start and pull the branch, then push a conflicting commit.
     // The fern-api install takes ~5-10s, so we have a window.
-    console.log("  Waiting 12s for workflow to pull branch before pushing conflict...");
+    console.log(
+        "  Waiting 12s for workflow to pull branch before pushing conflict...",
+    );
     await sleep(12000);
 
     // Get the updated SHA (after resetFernSpec added a commit)
@@ -473,14 +479,13 @@ async function testConflictPath(): Promise<void> {
     console.log("Step 3: Check for conflict comment on PR");
     const comments = await getPRComments(pr.number);
     const conflictComment = comments.find(
-        (c) => c.body.includes("Sync failed") || c.body.includes("Rebase error"),
+        (c) =>
+            c.body.includes("Sync failed") || c.body.includes("Rebase error"),
     );
 
     if (conflictComment) {
         console.log(`  Found conflict comment on PR #${pr.number}:`);
-        console.log(
-            `    ${conflictComment.body.substring(0, 200)}...`,
-        );
+        console.log(`    ${conflictComment.body.substring(0, 200)}...`);
         console.log("  PASS: Conflict path - error comment posted\n");
     } else if (run.conclusion === "failure") {
         console.log(

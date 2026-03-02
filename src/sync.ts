@@ -1,11 +1,11 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import * as core from "@actions/core";
-import * as github from "@actions/github";
 import * as exec from "@actions/exec";
+import * as github from "@actions/github";
 import * as io from "@actions/io";
-import * as fs from "fs";
-import * as path from "path";
-import * as yaml from "js-yaml";
 import * as glob from "glob";
+import * as yaml from "js-yaml";
 import { minimatch } from "minimatch";
 
 interface SourceMapping {
@@ -160,7 +160,7 @@ async function updateTargetSpec(
     } catch (yamlError) {
         try {
             fileMapping = JSON.parse(fileMappingInput) as SourceMapping[];
-        } catch (jsonError) {
+        } catch (_jsonError) {
             throw new Error(
                 `Failed to parse 'sources' input as either YAML or JSON. Please check the format. Error: ${(yamlError as Error).message}`,
             );
@@ -198,7 +198,7 @@ async function runFernApiUpdate(): Promise<void> {
         try {
             await exec.exec("fern", ["--version"], { silent: true });
             core.info("Fern CLI is already installed");
-        } catch (error) {
+        } catch (_error) {
             core.info("Fern CLI not found. Installing Fern CLI...");
             await exec.exec("npm", ["install", "-g", "fern-api"]);
         }
@@ -250,7 +250,7 @@ async function cloneRepository(options: SyncOptions): Promise<void> {
 
     try {
         await exec.exec("git", ["clone", repoUrl, repoDir]);
-    } catch (error) {
+    } catch (_error) {
         throw new Error(
             `Failed to clone repository. Please ensure your token has 'repo' scope and you have write access to ${options.repository}.`,
         );
@@ -353,7 +353,7 @@ async function branchExists(
             ref: `heads/${branchName}`,
         });
         return true;
-    } catch (error) {
+    } catch (_error) {
         return false;
     }
 }
@@ -466,7 +466,7 @@ async function hasDifferenceWithRemote(branchName: string): Promise<boolean> {
         );
 
         return !!diff.stdout.trim();
-    } catch (error) {
+    } catch (_error) {
         core.info(
             `Could not fetch remote branch, assuming this is the first push to new branch.`,
         );
@@ -510,11 +510,9 @@ async function pushWithFallback(
 ): Promise<boolean> {
     // Try regular push first
     try {
-        await exec.exec(
-            "git",
-            ["push", "--verbose", "origin", branchName],
-            { silent: false },
-        );
+        await exec.exec("git", ["push", "--verbose", "origin", branchName], {
+            silent: false,
+        });
         return true;
     } catch {
         core.info(
@@ -550,25 +548,21 @@ async function pushWithFallback(
 
         // Push after rebase failed — no rebase in progress, don't abort
         errorLabel = "Push error";
-        errorMsg = [
-            pushResult.stderr.trim(),
-            pushResult.stdout.trim(),
-        ]
-            .filter(Boolean)
-            .join("\n") || `git push failed with exit code ${pushResult.exitCode}`;
-        core.info(
-            `Push after rebase failed: ${errorMsg}`,
-        );
+        errorMsg =
+            [pushResult.stderr.trim(), pushResult.stdout.trim()]
+                .filter(Boolean)
+                .join("\n") ||
+            `git push failed with exit code ${pushResult.exitCode}`;
+        core.info(`Push after rebase failed: ${errorMsg}`);
     } else {
         // Rebase itself failed (merge conflicts)
         rebaseFailed = true;
         errorLabel = "Rebase error";
-        errorMsg = [
-            rebaseResult.stderr.trim(),
-            rebaseResult.stdout.trim(),
-        ]
-            .filter(Boolean)
-            .join("\n") || `git pull --rebase failed with exit code ${rebaseResult.exitCode}`;
+        errorMsg =
+            [rebaseResult.stderr.trim(), rebaseResult.stdout.trim()]
+                .filter(Boolean)
+                .join("\n") ||
+            `git pull --rebase failed with exit code ${rebaseResult.exitCode}`;
 
         core.info(
             `Rebase failed (likely due to merge conflicts). Aborting rebase.`,
@@ -581,12 +575,11 @@ async function pushWithFallback(
             { ignoreReturnCode: true },
         );
         if (abortResult.exitCode !== 0) {
-            abortErrorMsg = [
-                abortResult.stderr.trim(),
-                abortResult.stdout.trim(),
-            ]
-                .filter(Boolean)
-                .join("\n") || `rebase --abort failed with exit code ${abortResult.exitCode}`;
+            abortErrorMsg =
+                [abortResult.stderr.trim(), abortResult.stdout.trim()]
+                    .filter(Boolean)
+                    .join("\n") ||
+                `rebase --abort failed with exit code ${abortResult.exitCode}`;
             core.info(
                 `rebase --abort failed: ${abortErrorMsg}. The working tree may be in an unexpected state.`,
             );
@@ -681,11 +674,11 @@ async function createPR(
     core.info(`Creating new PR from ${branchName} to ${targetBranch}`);
     const date = new Date().toISOString().replace(/[:.]/g, "-");
 
-    let prTitle = isFromFern
+    const prTitle = isFromFern
         ? `chore: Update API specifications with fern api update (${date})`
         : `chore: Update OpenAPI specifications (${date})`;
 
-    let prBody = isFromFern
+    const prBody = isFromFern
         ? "Update API specifications by running fern api update."
         : "Update OpenAPI specifications based on changes in the source repository.";
 

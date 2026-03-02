@@ -39311,14 +39311,14 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.run = run;
+const fs = __importStar(__nccwpck_require__(7561));
+const path = __importStar(__nccwpck_require__(9411));
 const core = __importStar(__nccwpck_require__(2186));
-const github = __importStar(__nccwpck_require__(5438));
 const exec = __importStar(__nccwpck_require__(1514));
+const github = __importStar(__nccwpck_require__(5438));
 const io = __importStar(__nccwpck_require__(7436));
-const fs = __importStar(__nccwpck_require__(7147));
-const path = __importStar(__nccwpck_require__(1017));
-const yaml = __importStar(__nccwpck_require__(1917));
 const glob = __importStar(__nccwpck_require__(8211));
+const yaml = __importStar(__nccwpck_require__(1917));
 const minimatch_1 = __nccwpck_require__(4501);
 async function run() {
     try {
@@ -39400,7 +39400,7 @@ async function updateTargetSpec(token, branch, autoMerge) {
         try {
             fileMapping = JSON.parse(fileMappingInput);
         }
-        catch (jsonError) {
+        catch (_jsonError) {
             throw new Error(`Failed to parse 'sources' input as either YAML or JSON. Please check the format. Error: ${yamlError.message}`);
         }
     }
@@ -39429,7 +39429,7 @@ async function runFernApiUpdate() {
             await exec.exec("fern", ["--version"], { silent: true });
             core.info("Fern CLI is already installed");
         }
-        catch (error) {
+        catch (_error) {
             core.info("Fern CLI not found. Installing Fern CLI...");
             await exec.exec("npm", ["install", "-g", "fern-api"]);
         }
@@ -39468,7 +39468,7 @@ async function cloneRepository(options) {
     try {
         await exec.exec("git", ["clone", repoUrl, repoDir]);
     }
-    catch (error) {
+    catch (_error) {
         throw new Error(`Failed to clone repository. Please ensure your token has 'repo' scope and you have write access to ${options.repository}.`);
     }
     process.chdir(repoDir);
@@ -39528,7 +39528,7 @@ async function branchExists(owner, repo, branchName, octokit) {
         });
         return true;
     }
-    catch (error) {
+    catch (_error) {
         return false;
     }
 }
@@ -39610,7 +39610,7 @@ async function hasDifferenceWithRemote(branchName) {
         const diff = await exec.getExecOutput("git", ["diff", `HEAD`, `origin/${branchName}`], { silent: true });
         return !!diff.stdout.trim();
     }
-    catch (error) {
+    catch (_error) {
         core.info(`Could not fetch remote branch, assuming this is the first push to new branch.`);
         return true;
     }
@@ -39640,7 +39640,9 @@ async function pushChanges(branchName, options) {
 async function pushWithFallback(branchName, owner, repo, octokit) {
     // Try regular push first
     try {
-        await exec.exec("git", ["push", "--verbose", "origin", branchName], { silent: false });
+        await exec.exec("git", ["push", "--verbose", "origin", branchName], {
+            silent: false,
+        });
         return true;
     }
     catch {
@@ -39660,34 +39662,31 @@ async function pushWithFallback(branchName, owner, repo, octokit) {
         }
         // Push after rebase failed — no rebase in progress, don't abort
         errorLabel = "Push error";
-        errorMsg = [
-            pushResult.stderr.trim(),
-            pushResult.stdout.trim(),
-        ]
-            .filter(Boolean)
-            .join("\n") || `git push failed with exit code ${pushResult.exitCode}`;
+        errorMsg =
+            [pushResult.stderr.trim(), pushResult.stdout.trim()]
+                .filter(Boolean)
+                .join("\n") ||
+                `git push failed with exit code ${pushResult.exitCode}`;
         core.info(`Push after rebase failed: ${errorMsg}`);
     }
     else {
         // Rebase itself failed (merge conflicts)
         rebaseFailed = true;
         errorLabel = "Rebase error";
-        errorMsg = [
-            rebaseResult.stderr.trim(),
-            rebaseResult.stdout.trim(),
-        ]
-            .filter(Boolean)
-            .join("\n") || `git pull --rebase failed with exit code ${rebaseResult.exitCode}`;
+        errorMsg =
+            [rebaseResult.stderr.trim(), rebaseResult.stdout.trim()]
+                .filter(Boolean)
+                .join("\n") ||
+                `git pull --rebase failed with exit code ${rebaseResult.exitCode}`;
         core.info(`Rebase failed (likely due to merge conflicts). Aborting rebase.`);
         // Abort the rebase so the working tree is clean
         const abortResult = await exec.getExecOutput("git", ["rebase", "--abort"], { ignoreReturnCode: true });
         if (abortResult.exitCode !== 0) {
-            abortErrorMsg = [
-                abortResult.stderr.trim(),
-                abortResult.stdout.trim(),
-            ]
-                .filter(Boolean)
-                .join("\n") || `rebase --abort failed with exit code ${abortResult.exitCode}`;
+            abortErrorMsg =
+                [abortResult.stderr.trim(), abortResult.stdout.trim()]
+                    .filter(Boolean)
+                    .join("\n") ||
+                    `rebase --abort failed with exit code ${abortResult.exitCode}`;
             core.info(`rebase --abort failed: ${abortErrorMsg}. The working tree may be in an unexpected state.`);
         }
     }
@@ -39745,10 +39744,10 @@ async function updatePR(octokit, owner, repo, prNumber) {
 async function createPR(octokit, owner, repo, branchName, targetBranch, isFromFern) {
     core.info(`Creating new PR from ${branchName} to ${targetBranch}`);
     const date = new Date().toISOString().replace(/[:.]/g, "-");
-    let prTitle = isFromFern
+    const prTitle = isFromFern
         ? `chore: Update API specifications with fern api update (${date})`
         : `chore: Update OpenAPI specifications (${date})`;
-    let prBody = isFromFern
+    const prBody = isFromFern
         ? "Update API specifications by running fern api update."
         : "Update OpenAPI specifications based on changes in the source repository.";
     const prResponse = await octokit.rest.pulls.create({

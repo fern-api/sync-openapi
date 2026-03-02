@@ -6,7 +6,8 @@
     "build:sync": "ncc build src/sync.ts -o dist",
     "build": "npm run build:sync",
     "test": "vitest run",
-    "lint": "eslint src/**/*.ts"
+    "lint": "npx @biomejs/biome check src/ e2e/",
+    "format": "npx @biomejs/biome check --write src/ e2e/"
   },
   "keywords": [
     "github",
@@ -26,6 +27,7 @@
     "minimatch": "^10.2.3"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.5",
     "@types/js-yaml": "^4.0.5",
     "@types/node": "^18.15.11",
     "@vercel/ncc": "^0.36.1",
