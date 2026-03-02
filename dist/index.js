@@ -39368,9 +39368,15 @@ async function updateFromSourceSpec(token, branch, autoMerge) {
         await exec.exec("git", ["add", "."], { silent: true });
         await exec.exec("git", ["commit", "-m", "Update API specifications with fern api update"], { silent: true });
         core.info(`Pushing changes to branch: ${branch}`);
-        await exec.exec("git", ["push", "--force", "--verbose", "origin", branch], { silent: false });
+        await exec.exec("git", ["push", "--verbose", "origin", branch], { silent: false });
         if (!autoMerge) {
-            await createPR(octokit, owner, repo, branch, github.context.ref.replace("refs/heads/", ""), true);
+            const existingPRNumber = await prExists(owner, repo, branch, octokit);
+            if (existingPRNumber) {
+                core.info(`PR #${existingPRNumber} already exists for branch '${branch}'. New commit has been pushed to the existing PR.`);
+            }
+            else {
+                await createPR(octokit, owner, repo, branch, github.context.ref.replace("refs/heads/", ""), true);
+            }
         }
         else {
             core.info(`Changes pushed directly to branch '${branch}' because auto-merge is enabled.`);
