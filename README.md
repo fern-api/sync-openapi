@@ -1,9 +1,28 @@
-# sync-openapi
+<br/>
+<div align="center">
+  <a href="https://www.buildwithfern.com/?utm_source=github&utm_medium=readme&utm_campaign=sync-openapi&utm_content=logo">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/fern-api/fern/main/fern/images/logo-white.svg">
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/fern-api/fern/main/fern/images/logo-primary.svg">
+      <img alt="logo" src="https://raw.githubusercontent.com/fern-api/fern/main/fern/images/logo-primary.svg" height="80" align="center">
+    </picture>
+  </a>
+<br/>
 
-A GitHub Action to [sync OpenAPI specifications with your Fern setup](/learn/api-definitions/openapi/sync-your-open-api-specification). Choose your scenario:
+<br/>
 
-- **Case 1: Sync from public URL (most common).** Your OpenAPI spec is hosted at a publicly available URL and you want to pull it into your fern folder. The GitHub Action uses `fern api update` to pull the latest version of your OpenAPI spec from the `origin` field in your `generators.yml` file. 
-- **Case 2: Sync between repositories**: Your OpenAPI spec lives in one repository and you want to sync it to another repository where your fern folder lives (like fern-config). The GitHub Action uses explicit file mappings to pull the latest version of your OpenAPI spec. 
+[![GitHub Marketplace](https://img.shields.io/badge/GitHub%20Marketplace-Sync%20OpenAPI-blue?logo=github)](https://github.com/marketplace/actions/sync-openapi)
+![License](https://img.shields.io/badge/license-Apache%202.0-blue)
+[![Documentation](https://img.shields.io/badge/Read%20our%20Documentation-black?logo=book)](https://buildwithfern.com/learn/api-definitions/openapi/sync-your-open-api-specification?utm_source=fern-api/sync-openapi/readme-read-our-documentation)
+
+</div>
+
+# 🌿 sync-openapi
+
+A GitHub Action to [sync OpenAPI specifications with your Fern setup](https://buildwithfern.com/learn/api-definitions/openapi/sync-your-open-api-specification). Choose your scenario:
+
+- **Case 1: Sync from public URL (most common).** Your OpenAPI spec is hosted at a publicly available URL and you want to pull it into your fern folder. The GitHub Action uses `fern api update` to pull the latest version of your OpenAPI spec from the `origin` field in your `generators.yml` file.
+- **Case 2: Sync between repositories**: Your OpenAPI spec lives in one repository and you want to sync it to another repository where your fern folder lives (like fern-config). The GitHub Action uses explicit file mappings to pull the latest version of your OpenAPI spec.
 
 ## Usage
 
@@ -112,14 +131,15 @@ The GitHub token used for this action must have:
 
 ## Releasing
 
-This project uses GitHub Releases to publish new versions. When a release is published, a workflow automatically updates the major and minor version tags so consumers stay up to date.
+Tag the commit and publish a GitHub Release:
 
-For example, publishing release `v4.1.0` will:
-- Force-update the `v4` tag (so `@v4` users get the update)
-- Force-update the `v4.1` tag (so `@v4.1` users get the update)
+```sh
+git tag v4.0.1
+git push origin v4.0.1
+gh release create v4.0.1 --generate-notes
+```
 
-To release:
-1. Go to [Releases → Draft a new release](../../releases/new)
-2. Create a new tag (e.g., `v4.0.1`) following [semver](https://semver.org/)
-3. Click **Publish release**
+The [release workflow](.github/workflows/release.yml) automatically moves the major and minor version tags (e.g. `v4` and `v4.0`) to the new release so users pinned to `@v4` or `@v4.0` get the update immediately.
+
+---
 
