@@ -266,11 +266,18 @@ async function cloneRepository(options: SyncOptions): Promise<void> {
 }
 
 async function syncChanges(options: SyncOptions): Promise<void> {
-    const octokit = github.getOctokit(options.token!);
+    if (!options.token) {
+        throw new Error("GitHub token is required for syncing changes.");
+    }
+    if (!options.branch) {
+        throw new Error("Branch name is required for syncing changes.");
+    }
+
+    const octokit = github.getOctokit(options.token);
     const [owner, repo] = options.repository.split("/");
 
     try {
-        const workingBranch = options.branch!;
+        const workingBranch = options.branch;
 
         if (options.autoMerge) {
             core.info(

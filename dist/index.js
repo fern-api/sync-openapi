@@ -39480,6 +39480,12 @@ async function cloneRepository(options) {
     ]);
 }
 async function syncChanges(options) {
+    if (!options.token) {
+        throw new Error("GitHub token is required for syncing changes.");
+    }
+    if (!options.branch) {
+        throw new Error("Branch name is required for syncing changes.");
+    }
     const octokit = github.getOctokit(options.token);
     const [owner, repo] = options.repository.split("/");
     try {
