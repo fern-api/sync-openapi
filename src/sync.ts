@@ -665,7 +665,9 @@ async function createPR(
     return prResponse;
 }
 
-// Auto-invoke only when running as the action entry point (not when imported in tests)
-if (process.env.NODE_ENV !== "test") {
+// Auto-invoke only when running as the action entry point (not when imported in tests).
+// Vitest sets VITEST=true automatically; NODE_ENV is not used because a customer's
+// workflow could set NODE_ENV=test and silently prevent run() from executing.
+if (!process.env.VITEST) {
     run();
 }
