@@ -5,27 +5,40 @@ on:
     types: [published]
 
 jobs:
-  tag-major:
+  tag-aliases:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Move major version tag
+      - name: Move major and minor version tags
         if: ${{ !github.event.release.prerelease }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ github.event.release.tag_name }}"
 
-          # Only move the major tag if this is the latest release for the repo
+          # Only move tags if this is the latest release for the repo
           LATEST=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName)
           if [ "$LATEST" != "$VERSION" ]; then
             echo "Skipping: $VERSION is not the latest release (latest is $LATEST)"
             exit 0
           fi
 
-          MAJOR="v$(echo "$VERSION" | sed 's/^v//' | cut -d. -f1)"
+          STRIPPED="$(echo "$VERSION" | sed 's/^v//')"
+          PARTS="$(echo "$STRIPPED" | tr '.' '\n' | wc -l)"
+          MAJOR="v$(echo "$STRIPPED" | cut -d. -f1)"
+
+          # Always move the major tag (e.g. v3)
+          echo "Updating major tag: $MAJOR"
           git tag -f "$MAJOR"
           git push origin "refs/tags/$MAJOR" --force
+
+          # Move the minor tag only if version has 3+ parts (e.g. v3.1.0 → v3.1)
+          if [ "$PARTS" -ge 3 ]; then
+            MINOR="v$(echo "$STRIPPED" | cut -d. -f1).$(echo "$STRIPPED" | cut -d. -f2)"
+            echo "Updating minor tag: $MINOR"
+            git tag -f "$MINOR"
+            git push origin "refs/tags/$MINOR" --force
+          fi
