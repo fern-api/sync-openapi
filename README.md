@@ -11,7 +11,7 @@
 
 <br/>
 
-[![GitHub Marketplace](https://img.shields.io/badge/GitHub%20Marketplace-Sync%20OpenAPI-blue?logo=github)](https://github.com/marketplace/actions/sync-openapi)
+[![GitHub Marketplace](https://img.shields.io/badge/GitHub%20Marketplace-Sync%20OpenAPI-blue?logo=github)](https://github.com/marketplace/actions/sync-openapi-files)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue)
 [![Documentation](https://img.shields.io/badge/Read%20our%20Documentation-black?logo=book)](https://buildwithfern.com/learn/api-definitions/openapi/sync-your-open-api-specification?utm_source=fern-api/sync-openapi/readme-read-our-documentation)
 
