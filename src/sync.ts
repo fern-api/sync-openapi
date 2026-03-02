@@ -36,8 +36,6 @@ export async function run(): Promise<void> {
             );
         }
 
-        warnIfDynamicBranchName(branch);
-
         if (updateFromSource) {
             await updateFromSourceSpec(token, branch, autoMerge);
         } else {
@@ -339,32 +337,6 @@ async function syncChanges(options: SyncOptions): Promise<void> {
         throw new Error(
             `Failed to sync changes: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
-    }
-}
-
-// Warn if the branch name appears to contain a dynamic/timestamp component,
-// which would prevent PR deduplication from working.
-function warnIfDynamicBranchName(branch: string): void {
-    // Match common timestamp patterns in branch names:
-    // - ISO-like dates: 2026-02-25, 2026-02-25T00-27-08
-    // - Unix timestamps: 1772467782 (10+ digits)
-    // - Date segments: 20260225, 202602
-    const timestampPatterns = [
-        /\d{4}-\d{2}-\d{2}/, // ISO date: 2026-02-25
-        /\d{4}-\d{2}-\d{2}T\d{2}/, // ISO datetime: 2026-02-25T00
-        /\d{10,}/, // Unix timestamp: 1772467782
-        /\d{8,}/, // Compact date: 20260225
-    ];
-
-    for (const pattern of timestampPatterns) {
-        if (pattern.test(branch)) {
-            core.warning(
-                `Branch name '${branch}' appears to contain a timestamp or date. ` +
-                    `Using dynamic branch names means each run creates a new branch and a new PR. ` +
-                    `For PR deduplication to work, use a stable branch name (e.g., 'update-api').`,
-            );
-            return;
-        }
     }
 }
 
