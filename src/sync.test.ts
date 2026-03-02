@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const state = {
     infoCalls: [] as string[],
     setFailedCalls: [] as string[],
+    warningCalls: [] as string[],
     execCalls: [] as [string, string[] | undefined, unknown][], // [cmd, args, opts]
     getInputImpl: (_name: string): string => "",
     getBooleanInputImpl: (_name: string): boolean => false,
@@ -41,6 +42,9 @@ vi.mock("@actions/core", () => ({
     }),
     setFailed: vi.fn((msg: string) => {
         state.setFailedCalls.push(msg);
+    }),
+    warning: vi.fn((msg: string) => {
+        state.warningCalls.push(msg);
     }),
 }));
 
@@ -84,6 +88,7 @@ function setupMocks({
     // Reset shared state
     state.infoCalls = [];
     state.setFailedCalls = [];
+    state.warningCalls = [];
     state.execCalls = [];
 
     // Setup input implementations
@@ -153,6 +158,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     state.infoCalls = [];
     state.setFailedCalls = [];
+    state.warningCalls = [];
     state.execCalls = [];
 });
 
@@ -323,10 +329,12 @@ describe("updateFromSourceSpec", () => {
                 }),
             );
 
-            // Comment body should mention sync failed
+            // Comment body should mention sync failed and include error details
             const commentCall = mockIssuesCreateComment.mock.calls[0][0];
             expect(commentCall.body).toContain("Sync failed");
             expect(commentCall.body).toContain("merge conflicts");
+            expect(commentCall.body).toContain("Rebase error:");
+            expect(commentCall.body).toContain("merge conflict");
 
             // Action should still fail (not silently succeed)
             expect(state.setFailedCalls).toEqual(
@@ -359,6 +367,72 @@ describe("updateFromSourceSpec", () => {
             expect(state.setFailedCalls).toEqual(
                 expect.arrayContaining([
                     expect.stringContaining("Failed to push changes"),
+                ]),
+            );
+        });
+
+        it("should include rebase abort error in PR comment when abort fails", async () => {
+            setupMocks({ hasChanges: true, existingPRNumber: 42 });
+            state.execImpl = async (
+                cmd: string,
+                args?: string[],
+            ): Promise<number> => {
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    (args.includes("push") ||
+                        (args.includes("pull") && args.includes("--rebase")))
+                ) {
+                    throw new Error("merge conflict");
+                }
+                if (
+                    cmd === "git" &&
+                    Array.isArray(args) &&
+                    args.includes("rebase") &&
+                    args.includes("--abort")
+                ) {
+                    throw new Error("no rebase in progress");
+                }
+                return 0;
+            };
+            await importAndRun();
+
+            const commentCall = mockIssuesCreateComment.mock.calls[0][0];
+            expect(commentCall.body).toContain("Rebase error:");
+            expect(commentCall.body).toContain("merge conflict");
+            expect(commentCall.body).toContain("Rebase abort error:");
+            expect(commentCall.body).toContain("no rebase in progress");
+        });
+    });
+
+    describe("dynamic branch name warning", () => {
+        it("should warn when branch name contains an ISO date", async () => {
+            setupMocks({ hasChanges: false });
+            state.getInputImpl = (name: string): string => {
+                const inputs: Record<string, string> = {
+                    token: "fake-token",
+                    branch: "update-openapi-spec-2026-02-25T00-27-08-474Z",
+                    auto_merge: "false",
+                    update_from_source: "true",
+                };
+                return inputs[name] || "";
+            };
+            await importAndRun();
+
+            expect(state.warningCalls).toEqual(
+                expect.arrayContaining([
+                    expect.stringContaining("appears to contain a timestamp"),
+                ]),
+            );
+        });
+
+        it("should not warn for a stable branch name", async () => {
+            setupMocks({ hasChanges: false });
+            await importAndRun();
+
+            expect(state.warningCalls).not.toEqual(
+                expect.arrayContaining([
+                    expect.stringContaining("appears to contain a timestamp"),
                 ]),
             );
         });
