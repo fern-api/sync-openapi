@@ -30,7 +30,7 @@ jobs:
         with:
           token: ${{ secrets.OPENAPI_SYNC_TOKEN }}
       - name: Update API with Fern
-        uses: fern-api/sync-openapi@v3
+        uses: fern-api/sync-openapi@v4
         with:
           update_from_source: true
           token: ${{ secrets.OPENAPI_SYNC_TOKEN }}
@@ -63,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Sync OpenAPI spec to target repo
-        uses: fern-api/sync-openapi@v3
+        uses: fern-api/sync-openapi@v4
         with:
           repository: <your-org>/<your-target-repo>
           token: ${{ secrets.<PAT_TOKEN_NAME> }}
@@ -114,12 +114,12 @@ The GitHub token used for this action must have:
 
 This project uses GitHub Releases to publish new versions. When a release is published, a workflow automatically updates the major and minor version tags so consumers stay up to date.
 
-For example, publishing release `v3.1.0` will:
-- Force-update the `v3` tag (so `@v3` users get the update)
-- Force-update the `v3.1` tag (so `@v3.1` users get the update)
+For example, publishing release `v4.1.0` will:
+- Force-update the `v4` tag (so `@v4` users get the update)
+- Force-update the `v4.1` tag (so `@v4.1` users get the update)
 
 To release:
 1. Go to [Releases → Draft a new release](../../releases/new)
-2. Create a new tag (e.g., `v3.1.0`) following [semver](https://semver.org/)
+2. Create a new tag (e.g., `v4.0.1`) following [semver](https://semver.org/)
 3. Click **Publish release**
 
