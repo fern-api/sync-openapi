@@ -33,7 +33,7 @@
     "@vercel/ncc": "^0.36.1",
     "typescript": "^5.0.4",
     "vite": "^6.4.2",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.0"
   },
   "overrides": {
     "undici": "^6.24.1"
