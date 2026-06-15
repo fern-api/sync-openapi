@@ -36,6 +36,7 @@
     "vitest": "^4.1.0"
   },
   "overrides": {
-    "undici": "^6.24.1"
+    "undici": "^6.24.1",
+    "esbuild": ">=0.28.1"
   }
 }
